@@ -279,3 +279,24 @@ pub async fn get_sales_by_zone(state: State<'_, AppState>) -> Result<Vec<ZoneSal
 pub async fn get_total_sales(state: State<'_, AppState>) -> Result<f64, String> {
     state.get_total_sales().await
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SearchOrdersRequest {
+    pub search: Option<String>,
+    pub fecha_from: Option<String>,
+    pub fecha_to: Option<String>,
+    pub zona: Option<String>,
+}
+
+#[tauri::command]
+pub async fn search_orders(
+    request: SearchOrdersRequest,
+    state: State<'_, AppState>,
+) -> Result<Vec<Order>, String> {
+    state.search_orders(
+        request.search.as_deref(),
+        request.fecha_from.as_deref(),
+        request.fecha_to.as_deref(),
+        request.zona.as_deref(),
+    ).await
+}

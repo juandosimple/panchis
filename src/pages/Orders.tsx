@@ -18,6 +18,7 @@ export default function Orders() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [error, setError] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
 
   const [formData, setFormData] = useState({
     cliente: "",
@@ -28,6 +29,13 @@ export default function Orders() {
     zona: "",
   })
 
+  const [filters, setFilters] = useState({
+    search: "",
+    fecha_from: "",
+    fecha_to: "",
+    zona: "",
+  })
+
   useEffect(() => {
     loadOrders()
   }, [])
@@ -35,13 +43,41 @@ export default function Orders() {
   const loadOrders = async () => {
     try {
       setLoading(true)
-      const result = await invoke<Order[]>("get_orders")
+      let result: Order[]
+
+      // Si hay filtros activos, usar búsqueda
+      if (filters.search || filters.fecha_from || filters.fecha_to || filters.zona) {
+        result = await invoke<Order[]>("search_orders", {
+          request: {
+            search: filters.search || null,
+            fecha_from: filters.fecha_from || null,
+            fecha_to: filters.fecha_to || null,
+            zona: filters.zona || null,
+          },
+        })
+      } else {
+        result = await invoke<Order[]>("get_orders")
+      }
+
       setOrders(result)
     } catch (err) {
       setError(`Error loading orders: ${err}`)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleFilterChange = async () => {
+    await loadOrders()
+  }
+
+  const resetFilters = async () => {
+    setFilters({
+      search: "",
+      fecha_from: "",
+      fecha_to: "",
+      zona: "",
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,18 +150,79 @@ export default function Orders() {
     <div className="orders-container">
       <div className="orders-header">
         <h2>📋 Órdenes</h2>
-        <button
-          onClick={() => {
-            setShowForm(!showForm)
-            if (showForm) setEditingId(null)
-          }}
-          className="btn-primary"
-        >
-          {showForm ? "Cancelar" : "+ Nueva Orden"}
-        </button>
+        <div className="header-buttons">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="btn-secondary"
+          >
+            🔍 {showFilters ? "Ocultar" : "Mostrar"} Filtros
+          </button>
+          <button
+            onClick={() => {
+              setShowForm(!showForm)
+              if (showForm) setEditingId(null)
+            }}
+            className="btn-primary"
+          >
+            {showForm ? "Cancelar" : "+ Nueva Orden"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}
+
+      {showFilters && (
+        <div className="filters-panel">
+          <div className="filter-row">
+            <div className="filter-group">
+              <label htmlFor="search">Buscar por cliente o items</label>
+              <input
+                id="search"
+                type="text"
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                placeholder="Cliente, items..."
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="fecha_from">Desde</label>
+              <input
+                id="fecha_from"
+                type="date"
+                value={filters.fecha_from}
+                onChange={(e) => setFilters({ ...filters, fecha_from: e.target.value })}
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="fecha_to">Hasta</label>
+              <input
+                id="fecha_to"
+                type="date"
+                value={filters.fecha_to}
+                onChange={(e) => setFilters({ ...filters, fecha_to: e.target.value })}
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="zona">Zona</label>
+              <input
+                id="zona"
+                type="text"
+                value={filters.zona}
+                onChange={(e) => setFilters({ ...filters, zona: e.target.value })}
+                placeholder="Zona"
+              />
+            </div>
+          </div>
+          <div className="filter-actions">
+            <button onClick={handleFilterChange} className="btn-filter">
+              Aplicar Filtros
+            </button>
+            <button onClick={resetFilters} className="btn-reset">
+              Limpiar
+            </button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="order-form">

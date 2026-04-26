@@ -476,4 +476,49 @@ impl AppState {
 
         Ok(result)
     }
+
+    pub async fn search_orders(
+        &self,
+        search: Option<&str>,
+        fecha_from: Option<&str>,
+        fecha_to: Option<&str>,
+        zona: Option<&str>,
+    ) -> Result<Vec<Order>, String> {
+        let mut query = "SELECT id, cliente, items, precio, fecha, hora, zona FROM orders WHERE 1=1".to_string();
+
+        if let Some(s) = search {
+            query.push_str(&format!(" AND (cliente LIKE '%{}%' OR items LIKE '%{}%')", s, s));
+        }
+
+        if let Some(f) = fecha_from {
+            query.push_str(&format!(" AND fecha >= '{}'", f));
+        }
+
+        if let Some(f) = fecha_to {
+            query.push_str(&format!(" AND fecha <= '{}'", f));
+        }
+
+        if let Some(z) = zona {
+            query.push_str(&format!(" AND zona = '{}'", z));
+        }
+
+        query.push_str(" ORDER BY created_at DESC");
+
+        let orders = sqlx::query_as::<_, (i32, String, String, f64, String, String, String)>(
+            &query
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(orders.into_iter().map(|(id, cliente, items, precio, fecha, hora, zona)| Order {
+            id,
+            cliente,
+            items,
+            precio,
+            fecha,
+            hora,
+            zona,
+        }).collect())
+    }
 }
