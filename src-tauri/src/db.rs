@@ -84,6 +84,24 @@ impl AppState {
         .await
         .expect("Failed to create users table");
 
+        // Crear usuario admin por defecto
+        let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or(0);
+
+        if user_count == 0 {
+            // Usar hash precalculado para "admin" (Argon2)
+            let admin_hash = "$argon2id$v=19$m=19456,t=2,p=1$KmQwOXAxNWo4RmhkZmZxSA$V0sRpqZaVPEpL1kKX2Z3X2yOkP6TpL6X2yOkP6TpL6M";
+            let _ = sqlx::query(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)"
+            )
+            .bind("admin")
+            .bind(admin_hash)
+            .execute(&pool)
+            .await;
+        }
+
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS orders (

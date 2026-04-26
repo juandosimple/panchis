@@ -11,7 +11,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [isRegister, setIsRegister] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,12 +18,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setLoading(true)
 
     try {
-      const command = isRegister ? "register_user" : "login_user"
       const response = await invoke<{
         success: boolean
         message: string
         token?: string
-      }>(command, { username, password })
+      }>("login_user", { username, password })
 
       if (response.success && response.token) {
         localStorage.setItem("auth_token", response.token)
@@ -43,7 +41,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     <div className="login-container">
       <div className="login-card">
         <h1>🌮 Panchis</h1>
-        <h2>{isRegister ? "Registrarse" : "Iniciar Sesión"}</h2>
+        <h2>Iniciar Sesión</h2>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -55,6 +53,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Tu usuario"
               disabled={loading}
+              required
             />
           </div>
 
@@ -67,28 +66,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Tu contraseña"
               disabled={loading}
+              required
             />
           </div>
 
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" disabled={loading}>
-            {loading ? "Cargando..." : isRegister ? "Registrarse" : "Iniciar Sesión"}
+            {loading ? "Cargando..." : "Iniciar Sesión"}
           </button>
         </form>
 
-        <p className="toggle-auth">
-          {isRegister ? "¿Tienes cuenta? " : "¿No tienes cuenta? "}
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(!isRegister)
-              setError("")
-            }}
-            className="link-button"
-          >
-            {isRegister ? "Inicia sesión" : "Registrate"}
-          </button>
+        <p style={{ textAlign: "center", marginTop: "1.5rem", color: "#999", fontSize: "0.9rem" }}>
+          Aplicación privada
         </p>
       </div>
     </div>
