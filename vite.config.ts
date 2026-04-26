@@ -7,7 +7,7 @@ export default defineConfig(async () => ({
   // Vite options tailored for Tauri to prevent too much magic
   clearScreen: false,
   server: {
-    port: 1420,
+    port: 5173,
     strictPort: true,
     watch: {
       // Using polling since fsEvents may not be available on all platforms. Set to false to disable polling.
