@@ -1,5 +1,6 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteConnectOptions};
 use std::sync::Arc;
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,11 +58,15 @@ pub struct Item {
 
 impl AppState {
     pub async fn new() -> Self {
-        let database_url = "sqlite:panchis.db";
+        let database_url = "sqlite:panchis.db?mode=rwc";
+
+        let connect_options = SqliteConnectOptions::from_str(database_url)
+            .expect("Failed to create connect options")
+            .create_if_missing(true);
 
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
-            .connect(database_url)
+            .connect_with(connect_options)
             .await
             .expect("Failed to create pool");
 
