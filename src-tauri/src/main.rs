@@ -6,7 +6,10 @@ mod commands;
 
 use tauri::Manager;
 use db::AppState;
-use commands::*;
+use commands::{
+    register_user, login_user, verify_auth_token,
+    create_order, get_orders, get_order, update_order, delete_order,
+};
 
 #[tokio::main]
 async fn main() {
@@ -19,6 +22,11 @@ async fn main() {
             register_user,
             login_user,
             verify_auth_token,
+            create_order,
+            get_orders,
+            get_order,
+            update_order,
+            delete_order,
         ])
         .run(context)
         .expect("error while running tauri application");
