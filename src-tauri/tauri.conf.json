@@ -4,7 +4,7 @@
   "identifier": "com.panchis.app",
   "build": {
     "beforeDevCommand": "npm run vite",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
