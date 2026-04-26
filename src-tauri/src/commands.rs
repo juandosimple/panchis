@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::auth::{hash_password, verify_password, create_token, verify_token, Claims};
-use crate::db::{AppState, Order, Cliente};
+use crate::db::{AppState, Order, Cliente, Item};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthRequest {
@@ -215,4 +215,52 @@ pub async fn update_cliente(
 #[tauri::command]
 pub async fn delete_cliente(id: i32, state: State<'_, AppState>) -> Result<(), String> {
     state.delete_cliente(id).await
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateItemRequest {
+    pub nombre: String,
+    pub precio: f64,
+    pub descripcion: String,
+}
+
+#[tauri::command]
+pub async fn create_item(
+    request: CreateItemRequest,
+    state: State<'_, AppState>,
+) -> Result<i32, String> {
+    state.create_item(
+        &request.nombre,
+        request.precio,
+        &request.descripcion,
+    ).await
+}
+
+#[tauri::command]
+pub async fn get_items(state: State<'_, AppState>) -> Result<Vec<Item>, String> {
+    state.get_items().await
+}
+
+#[tauri::command]
+pub async fn get_item(id: i32, state: State<'_, AppState>) -> Result<Option<Item>, String> {
+    state.get_item(id).await
+}
+
+#[tauri::command]
+pub async fn update_item(
+    id: i32,
+    request: CreateItemRequest,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.update_item(
+        id,
+        &request.nombre,
+        request.precio,
+        &request.descripcion,
+    ).await
+}
+
+#[tauri::command]
+pub async fn delete_item(id: i32, state: State<'_, AppState>) -> Result<(), String> {
+    state.delete_item(id).await
 }

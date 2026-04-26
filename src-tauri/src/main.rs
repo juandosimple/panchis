@@ -10,6 +10,7 @@ use commands::{
     register_user, login_user, verify_auth_token,
     create_order, get_orders, get_order, update_order, delete_order,
     create_cliente, get_clientes, get_cliente, update_cliente, delete_cliente,
+    create_item, get_items, get_item, update_item, delete_item,
 };
 
 #[tokio::main]
@@ -33,6 +34,11 @@ async fn main() {
             get_cliente,
             update_cliente,
             delete_cliente,
+            create_item,
+            get_items,
+            get_item,
+            update_item,
+            delete_item,
         ])
         .run(context)
         .expect("error while running tauri application");

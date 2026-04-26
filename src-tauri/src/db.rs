@@ -34,6 +34,14 @@ pub struct Cliente {
     pub zona: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Item {
+    pub id: i32,
+    pub nombre: String,
+    pub precio: f64,
+    pub descripcion: String,
+}
+
 impl AppState {
     pub async fn new() -> Self {
         let database_url = "sqlite:panchis.db";
@@ -91,6 +99,21 @@ impl AppState {
         .execute(&pool)
         .await
         .expect("Failed to create clientes table");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                precio REAL NOT NULL,
+                descripcion TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create items table");
 
         AppState {
             db: Arc::new(pool),
@@ -312,6 +335,89 @@ impl AppState {
             .execute(self.db.as_ref())
             .await
             .map_err(|e| format!("Error deleting cliente: {}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn create_item(
+        &self,
+        nombre: &str,
+        precio: f64,
+        descripcion: &str,
+    ) -> Result<i32, String> {
+        let result = sqlx::query(
+            "INSERT INTO items (nombre, precio, descripcion) VALUES (?, ?, ?)"
+        )
+        .bind(nombre)
+        .bind(precio)
+        .bind(descripcion)
+        .execute(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Error creating item: {}", e))?;
+
+        Ok(result.last_insert_rowid() as i32)
+    }
+
+    pub async fn get_items(&self) -> Result<Vec<Item>, String> {
+        let items = sqlx::query_as::<_, (i32, String, f64, String)>(
+            "SELECT id, nombre, precio, descripcion FROM items ORDER BY nombre"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(items.into_iter().map(|(id, nombre, precio, descripcion)| Item {
+            id,
+            nombre,
+            precio,
+            descripcion,
+        }).collect())
+    }
+
+    pub async fn get_item(&self, id: i32) -> Result<Option<Item>, String> {
+        let item = sqlx::query_as::<_, (i32, String, f64, String)>(
+            "SELECT id, nombre, precio, descripcion FROM items WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(item.map(|(id, nombre, precio, descripcion)| Item {
+            id,
+            nombre,
+            precio,
+            descripcion,
+        }))
+    }
+
+    pub async fn update_item(
+        &self,
+        id: i32,
+        nombre: &str,
+        precio: f64,
+        descripcion: &str,
+    ) -> Result<(), String> {
+        sqlx::query(
+            "UPDATE items SET nombre = ?, precio = ?, descripcion = ? WHERE id = ?"
+        )
+        .bind(nombre)
+        .bind(precio)
+        .bind(descripcion)
+        .bind(id)
+        .execute(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Error updating item: {}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn delete_item(&self, id: i32) -> Result<(), String> {
+        sqlx::query("DELETE FROM items WHERE id = ?")
+            .bind(id)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error deleting item: {}", e))?;
 
         Ok(())
     }

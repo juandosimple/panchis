@@ -2,9 +2,10 @@ import { useEffect, useState } from "react"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
+import Items from "./pages/Items"
 import "./App.css"
 
-type Page = "dashboard" | "orders" | "clientes" | "reportes"
+type Page = "dashboard" | "orders" | "clientes" | "items" | "reportes"
 
 function App() {
   const [token, setToken] = useState<string | null>(null)
@@ -55,6 +56,12 @@ function App() {
             👥 Clientes
           </button>
           <button
+            onClick={() => setCurrentPage("items")}
+            className={currentPage === "items" ? "nav-btn active" : "nav-btn"}
+          >
+            🍴 Items
+          </button>
+          <button
             onClick={() => setCurrentPage("reportes")}
             className={currentPage === "reportes" ? "nav-btn active" : "nav-btn"}
           >
@@ -81,6 +88,10 @@ function App() {
                 <h3>👥 Clientes</h3>
                 <p>Administra tus clientes</p>
               </div>
+              <div className="feature-card" onClick={() => setCurrentPage("items")}>
+                <h3>🍴 Items</h3>
+                <p>Gestiona tu catálogo</p>
+              </div>
               <div className="feature-card" onClick={() => setCurrentPage("reportes")}>
                 <h3>📊 Reportes</h3>
                 <p>Visualiza tus estadísticas</p>
@@ -92,6 +103,8 @@ function App() {
         {currentPage === "orders" && <Orders />}
 
         {currentPage === "clientes" && <Clientes />}
+
+        {currentPage === "items" && <Items />}
 
         {currentPage === "reportes" && (
           <div className="container">
