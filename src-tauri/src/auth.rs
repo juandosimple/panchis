@@ -1,7 +1,6 @@
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{SaltString, ParsingError};
+use argon2::password_hash::SaltString;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use chrono::{Duration, Utc};
 

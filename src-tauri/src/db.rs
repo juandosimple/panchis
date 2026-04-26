@@ -1,5 +1,4 @@
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::Row;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 

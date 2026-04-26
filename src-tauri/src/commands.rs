@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use crate::auth::{hash_password, verify_password, create_token, verify_token, Claims};
+use crate::auth::{hash_password, verify_password, create_token, verify_token};
 use crate::db::{AppState, Order, Cliente, Item, DailySales, ZoneSales};
 
 #[derive(Serialize, Deserialize, Debug)]

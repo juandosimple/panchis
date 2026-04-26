@@ -4,7 +4,6 @@ mod auth;
 mod db;
 mod commands;
 
-use tauri::Manager;
 use db::AppState;
 use commands::{
     register_user, login_user, verify_auth_token,
