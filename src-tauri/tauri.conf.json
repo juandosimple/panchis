@@ -1,0 +1,22 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run vite",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Panchis - Gestor de Órdenes",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

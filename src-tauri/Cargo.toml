@@ -1,0 +1,22 @@
+[package]
+name = "panchis"
+version = "0.0.1"
+description = "Gestor de órdenes para negocio de panchos"
+authors = ["Juando"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = ["shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite"] }
+tokio = { version = "1", features = ["full"] }
+argon2 = "0.5"
+rand = "0.8"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
