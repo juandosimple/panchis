@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { invoke } from "@tauri-apps/api"
+import { invoke } from "@tauri-apps/api/core"
 import "../styles/Login.css"
 
 interface LoginProps {
