@@ -3,6 +3,20 @@ use sqlx::Row;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailySales {
+    pub fecha: String,
+    pub total: f64,
+    pub cantidad: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZoneSales {
+    pub zona: String,
+    pub total: f64,
+    pub cantidad: i32,
+}
+
 pub struct AppState {
     pub db: Arc<SqlitePool>,
 }
@@ -420,5 +434,46 @@ impl AppState {
             .map_err(|e| format!("Error deleting item: {}", e))?;
 
         Ok(())
+    }
+
+    pub async fn get_daily_sales(&self) -> Result<Vec<DailySales>, String> {
+        let results = sqlx::query_as::<_, (String, f64, i64)>(
+            "SELECT fecha, SUM(precio) as total, COUNT(*) as cantidad FROM orders GROUP BY fecha ORDER BY fecha DESC"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(results.into_iter().map(|(fecha, total, cantidad)| DailySales {
+            fecha,
+            total,
+            cantidad: cantidad as i32,
+        }).collect())
+    }
+
+    pub async fn get_sales_by_zone(&self) -> Result<Vec<ZoneSales>, String> {
+        let results = sqlx::query_as::<_, (String, f64, i64)>(
+            "SELECT zona, SUM(precio) as total, COUNT(*) as cantidad FROM orders GROUP BY zona ORDER BY total DESC"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(results.into_iter().map(|(zona, total, cantidad)| ZoneSales {
+            zona,
+            total,
+            cantidad: cantidad as i32,
+        }).collect())
+    }
+
+    pub async fn get_total_sales(&self) -> Result<f64, String> {
+        let result = sqlx::query_scalar::<_, f64>(
+            "SELECT COALESCE(SUM(precio), 0.0) FROM orders"
+        )
+        .fetch_one(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(result)
     }
 }

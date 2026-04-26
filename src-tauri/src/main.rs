@@ -11,6 +11,7 @@ use commands::{
     create_order, get_orders, get_order, update_order, delete_order,
     create_cliente, get_clientes, get_cliente, update_cliente, delete_cliente,
     create_item, get_items, get_item, update_item, delete_item,
+    get_daily_sales, get_sales_by_zone, get_total_sales,
 };
 
 #[tokio::main]
@@ -39,6 +40,9 @@ async fn main() {
             get_item,
             update_item,
             delete_item,
+            get_daily_sales,
+            get_sales_by_zone,
+            get_total_sales,
         ])
         .run(context)
         .expect("error while running tauri application");

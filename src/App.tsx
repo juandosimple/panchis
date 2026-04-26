@@ -3,6 +3,7 @@ import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
 import Items from "./pages/Items"
+import Reportes from "./pages/Reportes"
 import "./App.css"
 
 type Page = "dashboard" | "orders" | "clientes" | "items" | "reportes"
@@ -106,12 +107,7 @@ function App() {
 
         {currentPage === "items" && <Items />}
 
-        {currentPage === "reportes" && (
-          <div className="container">
-            <h2>📊 Reportes</h2>
-            <p>Módulo de reportes - Próximamente</p>
-          </div>
-        )}
+        {currentPage === "reportes" && <Reportes />}
       </div>
     </main>
   )

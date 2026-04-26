@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::auth::{hash_password, verify_password, create_token, verify_token, Claims};
-use crate::db::{AppState, Order, Cliente, Item};
+use crate::db::{AppState, Order, Cliente, Item, DailySales, ZoneSales};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthRequest {
@@ -263,4 +263,19 @@ pub async fn update_item(
 #[tauri::command]
 pub async fn delete_item(id: i32, state: State<'_, AppState>) -> Result<(), String> {
     state.delete_item(id).await
+}
+
+#[tauri::command]
+pub async fn get_daily_sales(state: State<'_, AppState>) -> Result<Vec<DailySales>, String> {
+    state.get_daily_sales().await
+}
+
+#[tauri::command]
+pub async fn get_sales_by_zone(state: State<'_, AppState>) -> Result<Vec<ZoneSales>, String> {
+    state.get_sales_by_zone().await
+}
+
+#[tauri::command]
+pub async fn get_total_sales(state: State<'_, AppState>) -> Result<f64, String> {
+    state.get_total_sales().await
 }
