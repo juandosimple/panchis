@@ -25,6 +25,15 @@ pub struct Order {
     pub zona: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cliente {
+    pub id: i32,
+    pub nombre: String,
+    pub telefono: String,
+    pub direccion: String,
+    pub zona: String,
+}
+
 impl AppState {
     pub async fn new() -> Self {
         let database_url = "sqlite:panchis.db";
@@ -66,6 +75,22 @@ impl AppState {
         .execute(&pool)
         .await
         .expect("Failed to create orders table");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS clientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                telefono TEXT,
+                direccion TEXT,
+                zona TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create clientes table");
 
         AppState {
             db: Arc::new(pool),
@@ -198,6 +223,95 @@ impl AppState {
             .execute(self.db.as_ref())
             .await
             .map_err(|e| format!("Error deleting order: {}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn create_cliente(
+        &self,
+        nombre: &str,
+        telefono: &str,
+        direccion: &str,
+        zona: &str,
+    ) -> Result<i32, String> {
+        let result = sqlx::query(
+            "INSERT INTO clientes (nombre, telefono, direccion, zona) VALUES (?, ?, ?, ?)"
+        )
+        .bind(nombre)
+        .bind(telefono)
+        .bind(direccion)
+        .bind(zona)
+        .execute(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Error creating cliente: {}", e))?;
+
+        Ok(result.last_insert_rowid() as i32)
+    }
+
+    pub async fn get_clientes(&self) -> Result<Vec<Cliente>, String> {
+        let clientes = sqlx::query_as::<_, (i32, String, String, String, String)>(
+            "SELECT id, nombre, telefono, direccion, zona FROM clientes ORDER BY nombre"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(clientes.into_iter().map(|(id, nombre, telefono, direccion, zona)| Cliente {
+            id,
+            nombre,
+            telefono,
+            direccion,
+            zona,
+        }).collect())
+    }
+
+    pub async fn get_cliente(&self, id: i32) -> Result<Option<Cliente>, String> {
+        let cliente = sqlx::query_as::<_, (i32, String, String, String, String)>(
+            "SELECT id, nombre, telefono, direccion, zona FROM clientes WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(cliente.map(|(id, nombre, telefono, direccion, zona)| Cliente {
+            id,
+            nombre,
+            telefono,
+            direccion,
+            zona,
+        }))
+    }
+
+    pub async fn update_cliente(
+        &self,
+        id: i32,
+        nombre: &str,
+        telefono: &str,
+        direccion: &str,
+        zona: &str,
+    ) -> Result<(), String> {
+        sqlx::query(
+            "UPDATE clientes SET nombre = ?, telefono = ?, direccion = ?, zona = ? WHERE id = ?"
+        )
+        .bind(nombre)
+        .bind(telefono)
+        .bind(direccion)
+        .bind(zona)
+        .bind(id)
+        .execute(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Error updating cliente: {}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn delete_cliente(&self, id: i32) -> Result<(), String> {
+        sqlx::query("DELETE FROM clientes WHERE id = ?")
+            .bind(id)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error deleting cliente: {}", e))?;
 
         Ok(())
     }

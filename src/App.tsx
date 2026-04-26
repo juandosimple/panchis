@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
+import Clientes from "./pages/Clientes"
 import "./App.css"
 
 type Page = "dashboard" | "orders" | "clientes" | "reportes"
@@ -90,12 +91,7 @@ function App() {
 
         {currentPage === "orders" && <Orders />}
 
-        {currentPage === "clientes" && (
-          <div className="container">
-            <h2>👥 Clientes</h2>
-            <p>Módulo de clientes - Próximamente</p>
-          </div>
-        )}
+        {currentPage === "clientes" && <Clientes />}
 
         {currentPage === "reportes" && (
           <div className="container">

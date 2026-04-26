@@ -9,6 +9,7 @@ use db::AppState;
 use commands::{
     register_user, login_user, verify_auth_token,
     create_order, get_orders, get_order, update_order, delete_order,
+    create_cliente, get_clientes, get_cliente, update_cliente, delete_cliente,
 };
 
 #[tokio::main]
@@ -27,6 +28,11 @@ async fn main() {
             get_order,
             update_order,
             delete_order,
+            create_cliente,
+            get_clientes,
+            get_cliente,
+            update_cliente,
+            delete_cliente,
         ])
         .run(context)
         .expect("error while running tauri application");
