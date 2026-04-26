@@ -91,15 +91,17 @@ impl AppState {
             .unwrap_or(0);
 
         if user_count == 0 {
-            // Usar hash precalculado para "admin" (Argon2)
-            let admin_hash = "$argon2id$v=19$m=19456,t=2,p=1$KmQwOXAxNWo4RmhkZmZxSA$V0sRpqZaVPEpL1kKX2Z3X2yOkP6TpL6X2yOkP6TpL6M";
-            let _ = sqlx::query(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)"
-            )
-            .bind("admin")
-            .bind(admin_hash)
-            .execute(&pool)
-            .await;
+            // Generar hash para la contraseña "panchis" (contraseña por defecto)
+            use crate::auth::hash_password;
+            if let Ok(admin_hash) = hash_password("panchis") {
+                let _ = sqlx::query(
+                    "INSERT INTO users (username, password_hash) VALUES (?, ?)"
+                )
+                .bind("admin")
+                .bind(&admin_hash)
+                .execute(&pool)
+                .await;
+            }
         }
 
         sqlx::query(
