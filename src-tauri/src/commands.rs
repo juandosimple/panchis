@@ -72,7 +72,17 @@ pub async fn login_user(
     password: String,
     state: State<'_, AppState>,
 ) -> Result<AuthResponse, String> {
-    // Buscar usuario
+    // Para desarrollo: aceptar admin/admin
+    if username == "admin" && password == "admin" {
+        let token = create_token(1, "admin")?;
+        return Ok(AuthResponse {
+            success: true,
+            message: "Login exitoso".to_string(),
+            token: Some(token),
+        });
+    }
+
+    // Buscar usuario en BD
     let user = state.get_user_by_username(&username).await?;
 
     match user {
