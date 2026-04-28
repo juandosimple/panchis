@@ -529,6 +529,9 @@
 .config-section {
   max-width: 500px;
   margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .config-card {
@@ -551,14 +554,34 @@
   margin-bottom: 1rem;
 }
 
-.config-divider {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.logout-btn-full {
+.config-version-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.logout-btn-large {
   width: 100%;
+  margin-top: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--error);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.logout-btn-large:hover {
+  background: #b91c1c;
 }
 
 @media (max-width: 768px) {

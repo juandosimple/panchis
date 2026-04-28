@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react"
+import { getVersion } from "@tauri-apps/api/app"
 import { useAuthStore } from "./stores/useAuthStore"
 import { useUIStore } from "./stores/useUIStore"
 import { useOrdersStore } from "./stores/useOrdersStore"
 import { useItemsStore } from "./stores/useItemsStore"
+import { usePrinterStore } from "./stores/usePrinterStore"
 import { geocodeOrigin } from "./hooks/useDistancia"
 import { useUpdater } from "./hooks/useUpdater"
+import CustomSelect from "./components/CustomSelect"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
@@ -48,6 +51,8 @@ function Dashboard() {
 
 function Configuracion() {
   const logout = useAuthStore((s) => s.logout)
+  const { ports, selectedPort, loadPorts, setSelectedPort } = usePrinterStore()
+  const [appVersion, setAppVersion] = useState<string>("")
   const [localAddress, setLocalAddress] = useState(
     () => localStorage.getItem("panchis_local_address") ?? ""
   )
@@ -57,6 +62,11 @@ function Configuracion() {
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "warning" | "error">("idle")
   const [saveMsg, setSaveMsg] = useState("")
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion(""))
+    loadPorts()
+  }, [])
 
   const handleSave = async () => {
     setSaving(true)
@@ -91,7 +101,7 @@ function Configuracion() {
 
   return (
     <div className="container">
-      <h2>⚙️ Configuración</h2>
+      <h2>⚙️ Configuración{appVersion && <span style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 400, marginLeft: "0.75rem" }}>v{appVersion}</span>}</h2>
       <div className="config-section">
         <div className="config-card">
           <h3>Dirección del Local</h3>
@@ -137,19 +147,29 @@ function Configuracion() {
             </p>
           )}
         </div>
-        <UpdateCard />
+
         <div className="config-card">
-          <h3>Sesión</h3>
-          <div className="config-divider">
-            <button onClick={logout} className="logout-btn logout-btn-full">Cerrar Sesión</button>
-          </div>
+          <h3>Impresora</h3>
+          <p className="config-text">Elegí la impresora térmica para los tickets</p>
+          <CustomSelect
+            value={selectedPort}
+            onChange={setSelectedPort}
+            options={ports.map((p) => ({ value: p, label: p }))}
+            placeholder="Seleccionar impresora"
+          />
         </div>
+
+        <UpdateCard appVersion={appVersion} />
+      </div>
+
+      <div className="config-section">
+        <button onClick={logout} className="logout-btn-large">Cerrar Sesión</button>
       </div>
     </div>
   )
 }
 
-function UpdateCard() {
+function UpdateCard({ appVersion }: { appVersion: string }) {
   const { checking, downloading, checkForUpdate } = useUpdater()
   const busy = checking || downloading
   const label = downloading ? "Descargando..." : checking ? "Buscando..." : "Buscar actualizaciones"
@@ -158,13 +178,16 @@ function UpdateCard() {
     <div className="config-card">
       <h3>Actualizaciones</h3>
       <p className="config-text">La app chequea actualizaciones al iniciar. También podés buscar manualmente.</p>
-      <button
-        onClick={() => checkForUpdate(false)}
-        disabled={busy}
-        style={{ marginTop: "0.5rem", padding: "0.5rem 1.25rem", background: "var(--btn-primary)", color: "white", border: "none", borderRadius: "8px", cursor: busy ? "not-allowed" : "pointer", fontWeight: 600, opacity: busy ? 0.6 : 1 }}
-      >
-        {label}
-      </button>
+      <div className="config-row">
+        <button
+          onClick={() => checkForUpdate(false)}
+          disabled={busy}
+          style={{ padding: "0.5rem 1.25rem", background: "var(--btn-primary)", color: "white", border: "none", borderRadius: "8px", cursor: busy ? "not-allowed" : "pointer", fontWeight: 600, opacity: busy ? 0.6 : 1 }}
+        >
+          {label}
+        </button>
+        {appVersion && <span className="config-version-label">Versión actual: v{appVersion}</span>}
+      </div>
     </div>
   )
 }
