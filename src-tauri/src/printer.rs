@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::fs;
+use std::path::PathBuf;
 use chrono::Local;
 
 #[derive(Clone)]
@@ -13,53 +14,167 @@ pub struct OrderReceipt {
 }
 
 pub fn print_order(order: OrderReceipt, port_name: &str) -> Result<(), String> {
-    print_order_using_shell(order, port_name)
+    let receipt = build_receipt(&order);
+    let tmp_path = std::env::temp_dir().join("panchis_receipt.txt");
+    fs::write(&tmp_path, &receipt).map_err(|e| format!("Error writing temp file: {}", e))?;
+
+    let result = send_to_printer(&tmp_path, port_name);
+    let _ = fs::remove_file(&tmp_path);
+    result
 }
 
 pub fn get_available_ports() -> Result<Vec<String>, String> {
-    // Get list of available printers from CUPS
+    let printers = list_printers().unwrap_or_default();
+    if printers.is_empty() {
+        eprintln!("No se detectaron impresoras, usando POS80 por defecto");
+        return Ok(vec!["POS80".to_string()]);
+    }
+    for p in &printers {
+        eprintln!("Impresora detectada: {}", p);
+    }
+    Ok(printers)
+}
+
+#[cfg(target_os = "windows")]
+fn list_printers() -> Result<Vec<String>, String> {
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
+        .output()
+        .map_err(|e| format!("Error detectando impresoras: {}", e))?;
+
+    if !output.status.success() {
+        return Ok(vec![]);
+    }
+
+    let s = String::from_utf8_lossy(&output.stdout);
+    Ok(s.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn list_printers() -> Result<Vec<String>, String> {
     let output = Command::new("lpstat")
         .arg("-p")
         .output()
         .map_err(|e| format!("Error detectando impresoras: {}", e))?;
 
     if !output.status.success() {
-        eprintln!("lpstat falló, usando POS80 por defecto");
-        return Ok(vec!["POS80".to_string()]);
+        return Ok(vec![]);
     }
 
-    let output_str = String::from_utf8_lossy(&output.stdout);
+    let s = String::from_utf8_lossy(&output.stdout);
     let mut printers = Vec::new();
-
-    // Parse printer names from lpstat output
-    // Format is: "printer POS80 is idle.  enabled since..."
-    for line in output_str.lines() {
+    for line in s.lines() {
+        // Format: "printer POS80 is idle.  enabled since..."
         if line.contains("printer") && line.contains("is ") {
-            // Extract printer name (second word)
             if let Some(name) = line.split_whitespace().nth(1) {
                 printers.push(name.to_string());
-                eprintln!("Impresora detectada: {}", name);
+            }
+        }
+    }
+    Ok(printers)
+}
+
+#[cfg(target_os = "windows")]
+fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
+    let path_str = file.to_string_lossy().replace('\'', "''");
+    let printer_esc = printer.replace('\'', "''");
+    let cmd = format!(
+        "Get-Content -Raw -LiteralPath '{}' | Out-Printer -Name '{}'",
+        path_str, printer_esc
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &cmd])
+        .output()
+        .map_err(|e| format!("Error ejecutando powershell: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Printer error: {}", err));
+    }
+
+    // Verify the job actually went through — if jobs are pending after ~2.5s the printer is likely offline
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    let check_cmd = format!(
+        "(Get-PrintJob -PrinterName '{}' -ErrorAction SilentlyContinue | Measure-Object).Count",
+        printer_esc
+    );
+    let check = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &check_cmd])
+        .output();
+    if let Ok(out) = check {
+        let count = String::from_utf8_lossy(&out.stdout).trim().parse::<u32>().unwrap_or(0);
+        if count > 0 {
+            // Try to flush the stuck job(s)
+            let purge = format!("Get-PrintJob -PrinterName '{}' | Remove-PrintJob", printer_esc);
+            let _ = Command::new("powershell").args(["-NoProfile", "-Command", &purge]).output();
+            return Err(format!(
+                "La impresora '{}' no respondió. Verificá que esté conectada y encendida.",
+                printer
+            ));
+        }
+    }
+
+    eprintln!("✓ Impresión enviada a {}", printer);
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
+    let output = Command::new("lp")
+        .arg("-d")
+        .arg(printer)
+        .arg(file)
+        .output()
+        .map_err(|e| format!("Error ejecutando lp: {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Printer error: {}", err_msg));
+    }
+
+    // Parse job id from "request id is POS80-123 (1 file(s))"
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let job_id = parse_job_id(&stdout);
+
+    if let Some(ref id) = job_id {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        let status = Command::new("lpstat")
+            .arg("-W").arg("not-completed")
+            .output();
+        if let Ok(out) = status {
+            let pending = String::from_utf8_lossy(&out.stdout);
+            if pending.contains(id) {
+                let _ = Command::new("cancel").arg(id).output();
+                return Err(format!(
+                    "La impresora '{}' no respondió. Verificá que esté conectada y encendida.",
+                    printer
+                ));
             }
         }
     }
 
-    // Si no encontramos impresoras, asumimos POS80
-    if printers.is_empty() {
-        eprintln!("No se detectaron impresoras, usando POS80 por defecto");
-        printers.push("POS80".to_string());
-    }
+    eprintln!("✓ Impresión enviada a {}", printer);
+    Ok(())
+}
 
-    Ok(printers)
+#[cfg(not(target_os = "windows"))]
+fn parse_job_id(stdout: &str) -> Option<String> {
+    // "request id is POS80-123 (1 file(s))"
+    let prefix = "request id is ";
+    let start = stdout.find(prefix)?;
+    let rest = &stdout[start + prefix.len()..];
+    let id_end = rest.find(|c: char| c.is_whitespace())?;
+    Some(rest[..id_end].to_string())
 }
 
 fn format_price(price: f64) -> String {
-    // Format price with . for thousands and , for decimals
-    // Example: 24000.50 -> "24.000,50"
     let total_cents = (price * 100.0).round() as i64;
     let pesos = total_cents / 100;
     let centavos = total_cents % 100;
 
-    // Format pesos with thousands separator
     let pesos_str = pesos.to_string();
     let mut formatted = String::new();
     let len = pesos_str.len();
@@ -71,28 +186,22 @@ fn format_price(price: f64) -> String {
         formatted.push(c);
     }
 
-    // Add centavos with comma separator
     format!("{},{:02}", formatted, centavos)
 }
 
-fn print_order_using_shell(order: OrderReceipt, _port_name: &str) -> Result<(), String> {
-    // Get current date and format as DD/MM/YYYY
+fn build_receipt(order: &OrderReceipt) -> String {
     let now = Local::now();
     let fecha_formatted = now.format("%d/%m/%Y").to_string();
 
-    // Parse hora to extract HH:MM
     let hora_formatted = if order.hora.len() >= 5 {
-        &order.hora[0..5]  // Extract HH:MM from HH:MM:SS
+        &order.hora[0..5]
     } else {
         &order.hora
     };
 
-    // Format total price with proper locale
     let total_formatted = format_price(order.total);
 
-    // Build receipt - SIMPLE TEXT ONLY (no ESC/POS commands)
-    // Format optimized for 58mm thermal printer (~32 chars width)
-    let receipt = format!(
+    format!(
         "Oh My Dog\nOrden: #{:02}\nFecha: {}\nHora: {}\n----------\n{}\n----------\nTotal: ${}\nPago: {}\n----------\nDireccion:\n{}\n\n\n\n\n",
         order.numero,
         fecha_formatted,
@@ -101,28 +210,5 @@ fn print_order_using_shell(order: OrderReceipt, _port_name: &str) -> Result<(), 
         total_formatted,
         order.metodo_pago,
         order.zona
-    );
-
-    // Crear archivo temporal
-    let tmp_path = "/tmp/panchis_receipt.txt";
-    fs::write(tmp_path, &receipt)
-        .map_err(|e| format!("Error writing temp file: {}", e))?;
-
-    // Usar lp para enviar a la impresora CUPS POS80
-    let output = Command::new("lp")
-        .arg("-d").arg("POS80")
-        .arg(tmp_path)
-        .output()
-        .map_err(|e| format!("Error ejecutando lp: {}", e))?;
-
-    // Limpiar archivo temporal
-    let _ = fs::remove_file(tmp_path);
-
-    if !output.status.success() {
-        let err_msg = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Printer error: {}", err_msg));
-    }
-
-    eprintln!("✓ Impresión enviada a POS80");
-    Ok(())
+    )
 }

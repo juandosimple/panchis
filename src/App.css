@@ -536,9 +536,9 @@
 
 .config-card {
   padding: 2rem;
-  background: rgba(55, 65, 81, 0.5);
+  background: rgba(55, 65, 81, 0.6);
   border-radius: var(--radius-sm);
-  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .config-card h3 {
