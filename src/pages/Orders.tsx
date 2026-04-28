@@ -26,6 +26,7 @@ export default function Orders() {
 
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [printing, setPrinting] = useState(false)
 
   // POS form state
   const [zona, setZona] = useState("")
@@ -136,11 +137,14 @@ export default function Orders() {
       zona,
       hora: new Date().toTimeString().split(" ")[0],
     }
+    setPrinting(true)
     try {
       await printOrder(orderData as Parameters<typeof printOrder>[0], metodoPago)
       notify("✓ Orden impresa exitosamente")
     } catch (err) {
       notify(`${err}`, true)
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -328,12 +332,12 @@ export default function Orders() {
 
             <div className="btn-row">
               <Button icon={Printer} variant="primary" size="md"
-                disabled={selectedItems.size === 0 || !zona}
+                disabled={selectedItems.size === 0 || !zona || printing}
                 onClick={() => handlePrint()} title="Imprimir antes de confirmar">
-                Imprimir
+                {printing ? "Imprimiendo..." : "Imprimir"}
               </Button>
               <Button icon={CheckCircle} variant="success" size="md" type="submit"
-                disabled={selectedItems.size === 0 || !zona}>
+                disabled={selectedItems.size === 0 || !zona || printing}>
                 Crear Orden
               </Button>
             </div>

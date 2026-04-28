@@ -3,6 +3,11 @@ use std::fs;
 use std::path::PathBuf;
 use chrono::Local;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Clone)]
 pub struct OrderReceipt {
     pub numero: i32,
@@ -36,9 +41,22 @@ pub fn get_available_ports() -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_os = "windows")]
+fn ps_command(script: &str) -> Command {
+    let mut cmd = Command::new("powershell");
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    cmd
+}
+
+#[cfg(target_os = "windows")]
 fn list_printers() -> Result<Vec<String>, String> {
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
+    // Filter out virtual printers (PDF, XPS, OneNote, Fax) and prompt-style ports
+    let script = "Get-Printer | Where-Object { \
+        $_.PortName -notlike 'PORTPROMPT*' -and \
+        $_.Name -notmatch '(?i)(PDF|XPS|OneNote|Fax)' \
+    } | Select-Object -ExpandProperty Name";
+
+    let output = ps_command(script)
         .output()
         .map_err(|e| format!("Error detectando impresoras: {}", e))?;
 
@@ -85,8 +103,7 @@ fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
         "Get-Content -Raw -LiteralPath '{}' | Out-Printer -Name '{}'",
         path_str, printer_esc
     );
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &cmd])
+    let output = ps_command(&cmd)
         .output()
         .map_err(|e| format!("Error ejecutando powershell: {}", e))?;
 
@@ -95,21 +112,17 @@ fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
         return Err(format!("Printer error: {}", err));
     }
 
-    // Verify the job actually went through — if jobs are pending after ~2.5s the printer is likely offline
-    std::thread::sleep(std::time::Duration::from_millis(2500));
+    // Verify the job actually went through
+    std::thread::sleep(std::time::Duration::from_millis(1500));
     let check_cmd = format!(
         "(Get-PrintJob -PrinterName '{}' -ErrorAction SilentlyContinue | Measure-Object).Count",
         printer_esc
     );
-    let check = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &check_cmd])
-        .output();
-    if let Ok(out) = check {
+    if let Ok(out) = ps_command(&check_cmd).output() {
         let count = String::from_utf8_lossy(&out.stdout).trim().parse::<u32>().unwrap_or(0);
         if count > 0 {
-            // Try to flush the stuck job(s)
             let purge = format!("Get-PrintJob -PrinterName '{}' | Remove-PrintJob", printer_esc);
-            let _ = Command::new("powershell").args(["-NoProfile", "-Command", &purge]).output();
+            let _ = ps_command(&purge).output();
             return Err(format!(
                 "La impresora '{}' no respondió. Verificá que esté conectada y encendida.",
                 printer
@@ -135,12 +148,11 @@ fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
         return Err(format!("Printer error: {}", err_msg));
     }
 
-    // Parse job id from "request id is POS80-123 (1 file(s))"
     let stdout = String::from_utf8_lossy(&output.stdout);
     let job_id = parse_job_id(&stdout);
 
     if let Some(ref id) = job_id {
-        std::thread::sleep(std::time::Duration::from_millis(2500));
+        std::thread::sleep(std::time::Duration::from_millis(1500));
         let status = Command::new("lpstat")
             .arg("-W").arg("not-completed")
             .output();
@@ -162,7 +174,6 @@ fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
 
 #[cfg(not(target_os = "windows"))]
 fn parse_job_id(stdout: &str) -> Option<String> {
-    // "request id is POS80-123 (1 file(s))"
     let prefix = "request id is ";
     let start = stdout.find(prefix)?;
     let rest = &stdout[start + prefix.len()..];
