@@ -8,15 +8,11 @@ interface DistanciaResult {
 
 const geocodeCache = new Map<string, { lat: number; lon: number } | null>()
 
-async function geocode(address: string): Promise<{ lat: number; lon: number } | null> {
+async function geocodeFreeText(address: string): Promise<{ lat: number; lon: number } | null> {
   if (geocodeCache.has(address)) return geocodeCache.get(address)!
   try {
-    const ciudad = localStorage.getItem("panchis_ciudad") ?? "Buenos Aires"
-    // Structured search: street + city separately is much more precise
     const params = new URLSearchParams({
-      street: address,
-      city: ciudad,
-      country: "Argentina",
+      q: address,
       format: "json",
       limit: "1",
       countrycodes: "ar",
@@ -28,6 +24,42 @@ async function geocode(address: string): Promise<{ lat: number; lon: number } | 
     const data = await res.json()
     const result = data.length > 0 ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null
     geocodeCache.set(address, result)
+    return result
+  } catch {
+    return null
+  }
+}
+
+// Geocode destination near the store's coordinates (±0.5° ≈ ~55km)
+async function geocodeNearStore(
+  address: string,
+  storeCoords: { lat: number; lon: number }
+): Promise<{ lat: number; lon: number } | null> {
+  const cacheKey = `near:${address}`
+  if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!
+  try {
+    const delta = 0.5
+    const viewbox = [
+      storeCoords.lon - delta,
+      storeCoords.lat + delta,
+      storeCoords.lon + delta,
+      storeCoords.lat - delta,
+    ].join(",")
+    const params = new URLSearchParams({
+      q: address,
+      format: "json",
+      limit: "1",
+      countrycodes: "ar",
+      viewbox,
+      bounded: "1",
+    })
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?${params}`,
+      { headers: { "Accept-Language": "es", "User-Agent": "Panchis POS App" } }
+    )
+    const data = await res.json()
+    const result = data.length > 0 ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null
+    geocodeCache.set(cacheKey, result)
     return result
   } catch {
     return null
@@ -55,12 +87,15 @@ export function useDistancia(destino: string): DistanciaResult {
         return
       }
 
-      const [origin, destination] = await Promise.all([
-        geocode(localAddress),
-        geocode(destino.trim()),
-      ])
+      const origin = await geocodeFreeText(localAddress)
+      if (!origin) {
+        setResult({ distancia: null, duracion: null, loading: false })
+        return
+      }
+      // Geocode destination bounded near the store location
+      const destination = await geocodeNearStore(destino.trim(), origin)
 
-      if (!origin || !destination) {
+      if (!destination) {
         setResult({ distancia: null, duracion: null, loading: false })
         return
       }
