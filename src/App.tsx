@@ -3,6 +3,7 @@ import { useAuthStore } from "./stores/useAuthStore"
 import { useUIStore } from "./stores/useUIStore"
 import { useOrdersStore } from "./stores/useOrdersStore"
 import { useItemsStore } from "./stores/useItemsStore"
+import { geocodeOrigin } from "./hooks/useDistancia"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
@@ -52,13 +53,33 @@ function Configuracion() {
   const [ciudad, setCiudad] = useState(
     () => localStorage.getItem("panchis_ciudad") ?? "Buenos Aires"
   )
-  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "warning" | "error">("idle")
+  const [saveMsg, setSaveMsg] = useState("")
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaving(true)
+    setSaveStatus("idle")
     localStorage.setItem("panchis_local_address", localAddress)
     localStorage.setItem("panchis_ciudad", ciudad)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    localStorage.removeItem("panchis_local_coords") // invalidate cached coords
+
+    if (localAddress.trim()) {
+      const coords = await geocodeOrigin(localAddress, ciudad)
+      if (coords) {
+        localStorage.setItem("panchis_local_coords", JSON.stringify({ address: localAddress, ...coords }))
+        setSaveStatus("success")
+        setSaveMsg(`✓ Guardado y geocodificado (${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)})`)
+      } else {
+        setSaveStatus("warning")
+        setSaveMsg("Guardado, pero no se pudo geocodificar. Probá con la dirección más completa (ej: Juan Bautista Alberdi 4430, Villa Ballester)")
+      }
+    } else {
+      setSaveStatus("success")
+      setSaveMsg("✓ Guardado")
+    }
+    setSaving(false)
+    setTimeout(() => setSaveStatus("idle"), 6000)
   }
 
   const inputStyle: React.CSSProperties = {
@@ -96,10 +117,24 @@ function Configuracion() {
           </div>
           <button
             onClick={handleSave}
-            style={{ marginTop: "0.5rem", padding: "0.5rem 1.25rem", background: "var(--success)", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 600 }}
+            disabled={saving}
+            style={{ marginTop: "0.5rem", padding: "0.5rem 1.25rem", background: "var(--success)", color: "white", border: "none", borderRadius: "8px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.6 : 1 }}
           >
-            {saved ? "✓ Guardado" : "Guardar"}
+            {saving ? "Guardando..." : "Guardar"}
           </button>
+          {saveStatus !== "idle" && (
+            <p style={{
+              marginTop: "0.75rem",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              color: saveStatus === "success" ? "var(--success)" : saveStatus === "warning" ? "#f59e0b" : "var(--error)",
+              background: saveStatus === "success" ? "rgba(16,185,129,0.1)" : saveStatus === "warning" ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+              border: `1px solid ${saveStatus === "success" ? "rgba(16,185,129,0.25)" : saveStatus === "warning" ? "rgba(245,158,11,0.25)" : "rgba(239,68,68,0.25)"}`,
+            }}>
+              {saveMsg}
+            </p>
+          )}
         </div>
         <div className="config-card">
           <h3>Sesión</h3>

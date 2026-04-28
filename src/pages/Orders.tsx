@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { FilePlus, Printer, CheckCircle, ChevronLeft, ChevronRight, Trash2, MapPin } from "lucide-react"
+import { FilePlus, Printer, CheckCircle, ChevronLeft, ChevronRight, Trash2, MapPin, Search } from "lucide-react"
 import QuantityInput from "../components/QuantityInput"
 import { useDistancia } from "../hooks/useDistancia"
 import { useOrdersStore } from "../stores/useOrdersStore"
@@ -33,7 +33,7 @@ export default function Orders() {
   const [selectedItems, setSelectedItems] = useState<Map<number, number>>(new Map())
   const [metodoPago, setMetodoPago] = useState("Efectivo")
 
-  const { distancia, duracion, loading: distanciaLoading } = useDistancia(zona)
+  const { distancia, duracion, loading: distanciaLoading, error: distanciaError, buscar: buscarDistancia, reset: resetDistancia } = useDistancia()
 
   // Historial state
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
@@ -269,9 +269,20 @@ export default function Orders() {
             />
             <div className="form-group">
               <label htmlFor="zona">Zona (Dirección)</label>
-              <input id="zona" type="text" value={zona}
-                onChange={(e) => setZona(e.target.value)}
-                placeholder="Ingresa la zona o dirección" required />
+              <div className="zona-input-row">
+                <input id="zona" type="text" value={zona}
+                  onChange={(e) => { setZona(e.target.value); resetDistancia() }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); buscarDistancia(zona) }
+                  }}
+                  placeholder="Ingresa la zona o dirección" required />
+                <button type="button" className="zona-search-btn"
+                  onClick={() => buscarDistancia(zona)}
+                  disabled={distanciaLoading || !zona.trim()}
+                  title="Buscar distancia">
+                  <Search size={16} />
+                </button>
+              </div>
               {distanciaLoading && (
                 <span className="distancia-badge distancia-loading">Calculando...</span>
               )}
@@ -279,6 +290,9 @@ export default function Orders() {
                 <span className="distancia-badge">
                   <MapPin size={12} /> {distancia} · {duracion}
                 </span>
+              )}
+              {!distanciaLoading && !distancia && distanciaError && (
+                <span className="distancia-badge distancia-loading">{distanciaError}</span>
               )}
             </div>
             <CustomSelect

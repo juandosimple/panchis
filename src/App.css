@@ -791,3 +791,36 @@
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
 }
+
+.zona-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.zona-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.zona-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.85rem;
+  background: var(--btn-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.zona-search-btn:hover:not(:disabled) {
+  background: var(--btn-primary-dark);
+}
+
+.zona-search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

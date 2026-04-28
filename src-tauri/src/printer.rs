@@ -90,24 +90,17 @@ fn print_order_using_shell(order: OrderReceipt, _port_name: &str) -> Result<(), 
     // Format total price with proper locale
     let total_formatted = format_price(order.total);
 
-    // Truncate dirección if too long (thermal printer width ~32-40 chars)
-    let dir_truncated = if order.zona.len() > 36 {
-        &order.zona[0..36]
-    } else {
-        &order.zona
-    };
-
     // Build receipt - SIMPLE TEXT ONLY (no ESC/POS commands)
     // Format optimized for 58mm thermal printer (~32 chars width)
     let receipt = format!(
-        "Oh My Dog\nOrden: #{:02}\nFecha: {}\nHora: {}\n----------\n{}\n----------\nTotal: ${}\nPago: {}\nDIR: {}\n\n\n\n\n",
+        "Oh My Dog\nOrden: #{:02}\nFecha: {}\nHora: {}\n----------\n{}\n----------\nTotal: ${}\nPago: {}\n----------\nDireccion:\n{}\n\n\n\n\n",
         order.numero,
         fecha_formatted,
         hora_formatted,
         order.items,
         total_formatted,
         order.metodo_pago,
-        dir_truncated
+        order.zona
     );
 
     // Crear archivo temporal
