@@ -1,6 +1,6 @@
 {
   "productName": "Panchis",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "identifier": "com.panchis.app",
   "build": {
     "beforeDevCommand": "npm run vite",

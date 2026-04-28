@@ -1,12 +1,10 @@
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
 use chrono::Local;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(not(target_os = "windows"))]
+use std::process::Command;
+
 
 #[derive(Clone)]
 pub struct OrderReceipt {
@@ -41,34 +39,21 @@ pub fn get_available_ports() -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn ps_command(script: &str) -> Command {
-    let mut cmd = Command::new("powershell");
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
-    cmd
-}
-
-#[cfg(target_os = "windows")]
 fn list_printers() -> Result<Vec<String>, String> {
-    // Filter out virtual printers (PDF, XPS, OneNote, Fax) and prompt-style ports
-    let script = "Get-Printer | Where-Object { \
-        $_.PortName -notlike 'PORTPROMPT*' -and \
-        $_.Name -notmatch '(?i)(PDF|XPS|OneNote|Fax)' \
-    } | Select-Object -ExpandProperty Name";
-
-    let output = ps_command(script)
-        .output()
-        .map_err(|e| format!("Error detectando impresoras: {}", e))?;
-
-    if !output.status.success() {
-        return Ok(vec![]);
-    }
-
-    let s = String::from_utf8_lossy(&output.stdout);
-    Ok(s.lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect())
+    // Use winspool API via the printers crate (no PowerShell, no console flash)
+    let all = printers::get_printers();
+    let filtered: Vec<String> = all
+        .into_iter()
+        .map(|p| p.name)
+        .filter(|name| {
+            let lower = name.to_lowercase();
+            !lower.contains("pdf")
+                && !lower.contains("xps")
+                && !lower.contains("onenote")
+                && !lower.contains("fax")
+        })
+        .collect();
+    Ok(filtered)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -96,41 +81,17 @@ fn list_printers() -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn send_to_printer(file: &PathBuf, printer: &str) -> Result<(), String> {
-    let path_str = file.to_string_lossy().replace('\'', "''");
-    let printer_esc = printer.replace('\'', "''");
-    let cmd = format!(
-        "Get-Content -Raw -LiteralPath '{}' | Out-Printer -Name '{}'",
-        path_str, printer_esc
-    );
-    let output = ps_command(&cmd)
-        .output()
-        .map_err(|e| format!("Error ejecutando powershell: {}", e))?;
+fn send_to_printer(file: &PathBuf, printer_name: &str) -> Result<(), String> {
+    let bytes = fs::read(file).map_err(|e| format!("Error reading temp file: {}", e))?;
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Printer error: {}", err));
-    }
+    let printer = printers::get_printer_by_name(printer_name)
+        .ok_or_else(|| format!("Impresora '{}' no encontrada", printer_name))?;
 
-    // Verify the job actually went through
-    std::thread::sleep(std::time::Duration::from_millis(1500));
-    let check_cmd = format!(
-        "(Get-PrintJob -PrinterName '{}' -ErrorAction SilentlyContinue | Measure-Object).Count",
-        printer_esc
-    );
-    if let Ok(out) = ps_command(&check_cmd).output() {
-        let count = String::from_utf8_lossy(&out.stdout).trim().parse::<u32>().unwrap_or(0);
-        if count > 0 {
-            let purge = format!("Get-PrintJob -PrinterName '{}' | Remove-PrintJob", printer_esc);
-            let _ = ps_command(&purge).output();
-            return Err(format!(
-                "La impresora '{}' no respondió. Verificá que esté conectada y encendida.",
-                printer
-            ));
-        }
-    }
+    printer
+        .print(&bytes, printers::common::base::job::PrinterJobOptions::none())
+        .map_err(|e| format!("La impresora '{}' rechazó el trabajo: {}. Verificá que esté conectada y encendida.", printer_name, e))?;
 
-    eprintln!("✓ Impresión enviada a {}", printer);
+    eprintln!("✓ Impresión enviada a {}", printer_name);
     Ok(())
 }
 
