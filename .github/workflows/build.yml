@@ -43,6 +43,11 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'linux' && 'x86_64-unknown-linux-gnu' || matrix.platform == 'macos' && 'aarch64-apple-darwin' || matrix.platform == 'macos-intel' && 'x86_64-apple-darwin' || '' }}
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'linux'
         run: |
@@ -58,6 +63,8 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          RUST_BACKTRACE: 1
 
       - name: Upload artifact (macOS)
         if: matrix.platform == 'macos' || matrix.platform == 'macos-intel'
