@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useAuthStore } from "./stores/useAuthStore"
 import { useUIStore } from "./stores/useUIStore"
 import { useOrdersStore } from "./stores/useOrdersStore"
@@ -46,14 +46,42 @@ function Dashboard() {
 
 function Configuracion() {
   const logout = useAuthStore((s) => s.logout)
+  const [localAddress, setLocalAddress] = useState(
+    () => localStorage.getItem("panchis_local_address") ?? ""
+  )
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = () => {
+    localStorage.setItem("panchis_local_address", localAddress)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
   return (
     <div className="container">
       <h2>⚙️ Configuración</h2>
       <div className="config-section">
         <div className="config-card">
-          <h3>Puerto de Impresora</h3>
-          <p className="config-text">Configura el puerto de tu impresora térmica</p>
-          <p className="config-text">El puerto será detectado automáticamente.</p>
+          <h3>Dirección del Local</h3>
+          <p className="config-text">Se usa para calcular la distancia a cada entrega</p>
+          <div className="form-group" style={{ marginTop: "0.75rem" }}>
+            <input
+              type="text"
+              value={localAddress}
+              onChange={(e) => setLocalAddress(e.target.value)}
+              placeholder="Ej: Av. Corrientes 1234, Buenos Aires"
+              style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1.5px solid var(--border)", background: "rgba(0,0,0,0.3)", color: "var(--text-primary)", fontFamily: "inherit", fontSize: "0.95rem" }}
+            />
+          </div>
+          <button
+            onClick={handleSave}
+            style={{ marginTop: "0.5rem", padding: "0.5rem 1.25rem", background: "var(--success)", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 600 }}
+          >
+            {saved ? "✓ Guardado" : "Guardar"}
+          </button>
+        </div>
+        <div className="config-card">
+          <h3>Sesión</h3>
           <div className="config-divider">
             <button onClick={logout} className="logout-btn logout-btn-full">Cerrar Sesión</button>
           </div>

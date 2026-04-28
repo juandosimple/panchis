@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react"
-import { FilePlus, Printer, CheckCircle, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import { FilePlus, Printer, CheckCircle, ChevronLeft, ChevronRight, Trash2, MapPin } from "lucide-react"
 import QuantityInput from "../components/QuantityInput"
+import { useDistancia } from "../hooks/useDistancia"
 import { useOrdersStore } from "../stores/useOrdersStore"
 import { useItemsStore } from "../stores/useItemsStore"
 import { useClientsStore } from "../stores/useClientsStore"
@@ -31,6 +32,8 @@ export default function Orders() {
   const [selectedClienteId, setSelectedClienteId] = useState("")
   const [selectedItems, setSelectedItems] = useState<Map<number, number>>(new Map())
   const [metodoPago, setMetodoPago] = useState("Efectivo")
+
+  const { distancia, duracion, loading: distanciaLoading } = useDistancia(zona)
 
   // Historial state
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
@@ -269,6 +272,14 @@ export default function Orders() {
               <input id="zona" type="text" value={zona}
                 onChange={(e) => setZona(e.target.value)}
                 placeholder="Ingresa la zona o dirección" required />
+              {distanciaLoading && (
+                <span className="distancia-badge distancia-loading">Calculando...</span>
+              )}
+              {!distanciaLoading && distancia && (
+                <span className="distancia-badge">
+                  <MapPin size={12} /> {distancia} · {duracion}
+                </span>
+              )}
             </div>
             <CustomSelect
               label="Método de Pago"
