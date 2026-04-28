@@ -1,10 +1,3 @@
-:root {
-  --items-primary: #374151;
-  --items-primary-dark: #1F2937;
-  --items-secondary: #6B7280;
-  --items-secondary-dark: #4B5563;
-}
-
 .items-container {
   padding: 2.5rem 2rem;
   max-width: 1280px;
@@ -30,7 +23,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--items-primary) 0%, var(--items-secondary-dark) 100%);
+  background: linear-gradient(135deg, var(--btn-primary) 0%, var(--btn-primary-dark) 100%);
   color: white;
   border: none;
   padding: 0.75rem 1.75rem;
@@ -97,13 +90,13 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--items-primary);
+  border-color: var(--btn-primary);
   box-shadow: 0 0 0 3px rgba(55, 65, 81, 0.15);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, var(--items-primary) 0%, var(--items-secondary-dark) 100%);
+  background: linear-gradient(135deg, var(--btn-primary) 0%, var(--btn-primary-dark) 100%);
   color: white;
   border: none;
   padding: 0.875rem 2rem;
@@ -165,12 +158,12 @@
 
 .nombre-cell {
   font-weight: 700;
-  color: var(--items-secondary);
+  color: var(--text-secondary);
 }
 
 .precio-cell {
   font-weight: 700;
-  color: var(--items-secondary);
+  color: var(--text-secondary);
 }
 
 .desc-cell {
@@ -273,7 +266,7 @@
     border-radius: var(--radius-lg);
     padding: 1.25rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-left: 3px solid var(--items-primary);
+    border-left: 3px solid var(--btn-primary);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
