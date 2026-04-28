@@ -1,7 +1,9 @@
-use std::fs;
-use std::path::PathBuf;
 use chrono::Local;
 
+#[cfg(not(target_os = "windows"))]
+use std::fs;
+#[cfg(not(target_os = "windows"))]
+use std::path::PathBuf;
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 
@@ -96,12 +98,15 @@ fn list_printers() -> Result<Vec<String>, String> {
 
 #[cfg(target_os = "windows")]
 fn send_bytes_to_printer(bytes: &[u8], printer_name: &str) -> Result<(), String> {
+    use printers::common::base::job::PrinterJobOptions;
+
     let printer = printers::get_printer_by_name(printer_name)
         .ok_or_else(|| format!("Impresora '{}' no encontrada", printer_name))?;
 
-    let opts = printers::common::base::job::PrinterJobOptions {
+    let opts = PrinterJobOptions {
         name: Some("Panchis Receipt"),
-        raw_properties: &[("data-type", "RAW"), ("document-format", "application/octet-stream")],
+        raw_properties: &[("data-type", "RAW")],
+        ..PrinterJobOptions::none()
     };
 
     printer
