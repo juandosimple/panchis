@@ -50,42 +50,22 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Upload artifact (macOS)
-        if: matrix.platform == 'macos'
-        uses: actions/upload-artifact@v4
-        with:
-          name: panchis-macos
-          path: src-tauri/target/release/bundle/dmg/*.dmg
-          if-no-files-found: warn
-
-      - name: Upload artifact (Windows)
-        if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: panchis-windows
-          path: src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: warn
-
-  release:
-    name: Create Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create release
+      - name: Create release (macOS)
+        if: matrix.platform == 'macos' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: src-tauri/target/release/bundle/dmg/*.dmg
           draft: false
           prerelease: false
-          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release (Windows)
+        if: matrix.platform == 'windows' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: src-tauri/target/release/bundle/msi/*.msi
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
