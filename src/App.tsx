@@ -4,6 +4,7 @@ import { useUIStore } from "./stores/useUIStore"
 import { useOrdersStore } from "./stores/useOrdersStore"
 import { useItemsStore } from "./stores/useItemsStore"
 import { geocodeOrigin } from "./hooks/useDistancia"
+import { useUpdater } from "./hooks/useUpdater"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
@@ -136,6 +137,7 @@ function Configuracion() {
             </p>
           )}
         </div>
+        <UpdateCard />
         <div className="config-card">
           <h3>Sesión</h3>
           <div className="config-divider">
@@ -143,6 +145,26 @@ function Configuracion() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function UpdateCard() {
+  const { checking, downloading, checkForUpdate } = useUpdater()
+  const busy = checking || downloading
+  const label = downloading ? "Descargando..." : checking ? "Buscando..." : "Buscar actualizaciones"
+
+  return (
+    <div className="config-card">
+      <h3>Actualizaciones</h3>
+      <p className="config-text">La app chequea actualizaciones al iniciar. También podés buscar manualmente.</p>
+      <button
+        onClick={() => checkForUpdate(false)}
+        disabled={busy}
+        style={{ marginTop: "0.5rem", padding: "0.5rem 1.25rem", background: "var(--btn-primary)", color: "white", border: "none", borderRadius: "8px", cursor: busy ? "not-allowed" : "pointer", fontWeight: 600, opacity: busy ? 0.6 : 1 }}
+      >
+        {label}
+      </button>
     </div>
   )
 }
@@ -162,12 +184,16 @@ export default function App() {
   const { currentPage, showOrdersModal } = useUIStore()
   const loadOrders = useOrdersStore((s) => s.loadOrders)
   const loadItems = useItemsStore((s) => s.loadItems)
+  const { checkForUpdate } = useUpdater()
 
   // Bootstrap on login
   useEffect(() => {
     if (!token) return
     loadOrders()
     loadItems()
+    // Silent update check shortly after login
+    const t = setTimeout(() => { checkForUpdate(true) }, 3000)
+    return () => clearTimeout(t)
   }, [token])
 
   if (!token) return <Login />
