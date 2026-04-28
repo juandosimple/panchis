@@ -58,6 +58,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
+      - name: Debug bundle contents (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "=== dmg dir ==="
+          ls -la src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/ || true
+          echo "=== macos dir ==="
+          ls -la src-tauri/target/aarch64-apple-darwin/release/bundle/macos/ || true
+
+      - name: Debug bundle contents (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          echo "=== msi dir ==="
+          ls -la src-tauri/target/release/bundle/msi/ || true
+          echo "=== nsis dir ==="
+          ls -la src-tauri/target/release/bundle/nsis/ || true
+
       - name: Upload installers
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -83,54 +100,64 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate latest.json
+      - name: Generate latest.json from actual release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           TAG="${GITHUB_REF_NAME}"
           REPO="${GITHUB_REPOSITORY}"
-          NAME="Panchis"
 
-          # Wait briefly for assets to settle
-          sleep 5
+          # Wait for upload step to settle
+          sleep 10
 
-          # Download .sig files from the release
-          gh release download "$TAG" --repo "$REPO" --pattern "*.sig" --dir ./sigs || true
+          # List all asset names from the release
+          ASSETS=$(gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[].name')
+          echo "Assets in release:"
+          echo "$ASSETS"
+
+          # Find the actual filenames (Tauri uses different naming per platform)
+          DARWIN_FILE=$(echo "$ASSETS" | grep -E '\.app\.tar\.gz$' | head -n1 || true)
+          DARWIN_SIG_FILE=$(echo "$ASSETS" | grep -E '\.app\.tar\.gz\.sig$' | head -n1 || true)
+          WINDOWS_FILE=$(echo "$ASSETS" | grep -E '\.nsis\.zip$' | head -n1 || true)
+          WINDOWS_SIG_FILE=$(echo "$ASSETS" | grep -E '\.nsis\.zip\.sig$' | head -n1 || true)
+
+          echo "Darwin file: $DARWIN_FILE"
+          echo "Darwin sig: $DARWIN_SIG_FILE"
+          echo "Windows file: $WINDOWS_FILE"
+          echo "Windows sig: $WINDOWS_SIG_FILE"
+
+          # Download .sig files to read their contents
+          mkdir -p sigs
+          [ -n "$DARWIN_SIG_FILE" ] && gh release download "$TAG" --repo "$REPO" --pattern "$DARWIN_SIG_FILE" --dir ./sigs
+          [ -n "$WINDOWS_SIG_FILE" ] && gh release download "$TAG" --repo "$REPO" --pattern "$WINDOWS_SIG_FILE" --dir ./sigs
 
           DARWIN_SIG=""
           WINDOWS_SIG=""
-          for f in ./sigs/*.app.tar.gz.sig; do
-            [ -e "$f" ] && DARWIN_SIG=$(cat "$f")
-          done
-          for f in ./sigs/*.nsis.zip.sig; do
-            [ -e "$f" ] && WINDOWS_SIG=$(cat "$f")
-          done
+          [ -n "$DARWIN_SIG_FILE" ] && [ -f "./sigs/$DARWIN_SIG_FILE" ] && DARWIN_SIG=$(cat "./sigs/$DARWIN_SIG_FILE")
+          [ -n "$WINDOWS_SIG_FILE" ] && [ -f "./sigs/$WINDOWS_SIG_FILE" ] && WINDOWS_SIG=$(cat "./sigs/$WINDOWS_SIG_FILE")
 
-          DARWIN_URL="https://github.com/${REPO}/releases/download/${TAG}/${NAME}_${TAG}_aarch64.app.tar.gz"
-          WINDOWS_URL="https://github.com/${REPO}/releases/download/${TAG}/${NAME}_${TAG}_x64-setup.nsis.zip"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+          PLATFORMS="{}"
+          if [ -n "$DARWIN_FILE" ]; then
+            PLATFORMS=$(echo "$PLATFORMS" | jq --arg sig "$DARWIN_SIG" --arg url "${BASE_URL}/${DARWIN_FILE}" '. + {"darwin-aarch64": {signature: $sig, url: $url}}')
+          fi
+          if [ -n "$WINDOWS_FILE" ]; then
+            PLATFORMS=$(echo "$PLATFORMS" | jq --arg sig "$WINDOWS_SIG" --arg url "${BASE_URL}/${WINDOWS_FILE}" '. + {"windows-x86_64": {signature: $sig, url: $url}}')
+          fi
 
-          cat > latest.json <<EOF
-          {
-            "version": "${TAG}",
-            "notes": "Release ${TAG}",
-            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "platforms": {
-              "darwin-aarch64": {
-                "signature": "${DARWIN_SIG}",
-                "url": "${DARWIN_URL}"
-              },
-              "windows-x86_64": {
-                "signature": "${WINDOWS_SIG}",
-                "url": "${WINDOWS_URL}"
-              }
-            }
-          }
-          EOF
+          jq -n \
+            --arg version "$TAG" \
+            --arg notes "Release $TAG" \
+            --arg pub_date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --argjson platforms "$PLATFORMS" \
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms}' \
+            > latest.json
 
+          echo "Generated latest.json:"
           cat latest.json
 
-      - name: Upload latest.json to release
+      - name: Upload latest.json
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
