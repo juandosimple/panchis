@@ -45,9 +45,6 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build frontend
-        run: npm run vite:build
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
