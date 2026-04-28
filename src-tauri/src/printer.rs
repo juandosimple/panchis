@@ -89,7 +89,7 @@ fn send_to_printer(file: &PathBuf, printer_name: &str) -> Result<(), String> {
 
     printer
         .print(&bytes, printers::common::base::job::PrinterJobOptions::none())
-        .map_err(|e| format!("La impresora '{}' rechazó el trabajo: {}. Verificá que esté conectada y encendida.", printer_name, e))?;
+        .map_err(|e| format!("La impresora '{}' rechazó el trabajo: {:?}. Verificá que esté conectada y encendida.", printer_name, e))?;
 
     eprintln!("✓ Impresión enviada a {}", printer_name);
     Ok(())
