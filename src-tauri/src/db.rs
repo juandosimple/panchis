@@ -54,6 +54,24 @@ pub struct Item {
     pub nombre: String,
     pub precio: f64,
     pub descripcion: String,
+    pub categoria: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StockItem {
+    pub id: i32,
+    pub nombre: String,
+    pub cantidad: f64,
+    pub unidad: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemIngrediente {
+    pub stock_item_id: i32,
+    pub nombre: String,
+    pub cantidad: f64,
+    pub unidad: String,
 }
 
 impl AppState {
@@ -145,6 +163,7 @@ impl AppState {
                 nombre TEXT NOT NULL,
                 precio REAL NOT NULL,
                 descripcion TEXT,
+                categoria TEXT NOT NULL DEFAULT 'General',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             "#,
@@ -152,6 +171,40 @@ impl AppState {
         .execute(&pool)
         .await
         .expect("Failed to create items table");
+
+        let _ = sqlx::query("ALTER TABLE items ADD COLUMN categoria TEXT NOT NULL DEFAULT 'General'")
+            .execute(&pool)
+            .await;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS stock_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                cantidad REAL NOT NULL DEFAULT 0,
+                unidad TEXT NOT NULL DEFAULT 'unidades'
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create stock_items table");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS item_ingredientes (
+                item_id INTEGER NOT NULL,
+                stock_item_id INTEGER NOT NULL,
+                cantidad REAL NOT NULL DEFAULT 1,
+                PRIMARY KEY (item_id, stock_item_id),
+                FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+                FOREIGN KEY (stock_item_id) REFERENCES stock_items(id) ON DELETE CASCADE
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create item_ingredientes table");
 
         AppState {
             db: Arc::new(pool),
@@ -195,6 +248,7 @@ impl AppState {
         fecha: &str,
         hora: &str,
         zona: &str,
+        items_vendidos: &[(i32, f64)],
     ) -> Result<i32, String> {
         let result = sqlx::query(
             "INSERT INTO orders (cliente, items, precio, fecha, hora, zona) VALUES (?, ?, ?, ?, ?, ?)"
@@ -209,7 +263,12 @@ impl AppState {
         .await
         .map_err(|e| format!("Error creating order: {}", e))?;
 
-        Ok(result.last_insert_rowid() as i32)
+        let order_id = result.last_insert_rowid() as i32;
+
+        // Decrement stock — don't fail the order if stock update errors
+        let _ = self.descontar_stock_por_venta(items_vendidos).await;
+
+        Ok(order_id)
     }
 
     pub async fn get_orders(&self) -> Result<Vec<Order>, String> {
@@ -382,13 +441,15 @@ impl AppState {
         nombre: &str,
         precio: f64,
         descripcion: &str,
+        categoria: &str,
     ) -> Result<i32, String> {
         let result = sqlx::query(
-            "INSERT INTO items (nombre, precio, descripcion) VALUES (?, ?, ?)"
+            "INSERT INTO items (nombre, precio, descripcion, categoria) VALUES (?, ?, ?, ?)"
         )
         .bind(nombre)
         .bind(precio)
         .bind(descripcion)
+        .bind(categoria)
         .execute(self.db.as_ref())
         .await
         .map_err(|e| format!("Error creating item: {}", e))?;
@@ -397,35 +458,37 @@ impl AppState {
     }
 
     pub async fn get_items(&self) -> Result<Vec<Item>, String> {
-        let items = sqlx::query_as::<_, (i32, String, f64, String)>(
-            "SELECT id, nombre, precio, descripcion FROM items ORDER BY nombre"
+        let items = sqlx::query_as::<_, (i32, String, f64, String, String)>(
+            "SELECT id, nombre, precio, descripcion, categoria FROM items ORDER BY nombre"
         )
         .fetch_all(self.db.as_ref())
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-        Ok(items.into_iter().map(|(id, nombre, precio, descripcion)| Item {
+        Ok(items.into_iter().map(|(id, nombre, precio, descripcion, categoria)| Item {
             id,
             nombre,
             precio,
             descripcion,
+            categoria,
         }).collect())
     }
 
     pub async fn get_item(&self, id: i32) -> Result<Option<Item>, String> {
-        let item = sqlx::query_as::<_, (i32, String, f64, String)>(
-            "SELECT id, nombre, precio, descripcion FROM items WHERE id = ?"
+        let item = sqlx::query_as::<_, (i32, String, f64, String, String)>(
+            "SELECT id, nombre, precio, descripcion, categoria FROM items WHERE id = ?"
         )
         .bind(id)
         .fetch_optional(self.db.as_ref())
         .await
         .map_err(|e| format!("Database error: {}", e))?;
 
-        Ok(item.map(|(id, nombre, precio, descripcion)| Item {
+        Ok(item.map(|(id, nombre, precio, descripcion, categoria)| Item {
             id,
             nombre,
             precio,
             descripcion,
+            categoria,
         }))
     }
 
@@ -435,13 +498,15 @@ impl AppState {
         nombre: &str,
         precio: f64,
         descripcion: &str,
+        categoria: &str,
     ) -> Result<(), String> {
         sqlx::query(
-            "UPDATE items SET nombre = ?, precio = ?, descripcion = ? WHERE id = ?"
+            "UPDATE items SET nombre = ?, precio = ?, descripcion = ?, categoria = ? WHERE id = ?"
         )
         .bind(nombre)
         .bind(precio)
         .bind(descripcion)
+        .bind(categoria)
         .bind(id)
         .execute(self.db.as_ref())
         .await
@@ -499,6 +564,109 @@ impl AppState {
         .map_err(|e| format!("Database error: {}", e))?;
 
         Ok(result)
+    }
+
+    pub async fn create_stock_item(&self, nombre: &str, cantidad: f64, unidad: &str) -> Result<i32, String> {
+        let result = sqlx::query(
+            "INSERT INTO stock_items (nombre, cantidad, unidad) VALUES (?, ?, ?)"
+        )
+        .bind(nombre)
+        .bind(cantidad)
+        .bind(unidad)
+        .execute(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Error creating stock item: {}", e))?;
+        Ok(result.last_insert_rowid() as i32)
+    }
+
+    pub async fn get_stock_items(&self) -> Result<Vec<StockItem>, String> {
+        let rows = sqlx::query_as::<_, (i32, String, f64, String)>(
+            "SELECT id, nombre, cantidad, unidad FROM stock_items ORDER BY nombre"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(rows.into_iter().map(|(id, nombre, cantidad, unidad)| StockItem {
+            id, nombre, cantidad, unidad,
+        }).collect())
+    }
+
+    pub async fn update_stock_item(&self, id: i32, nombre: &str, cantidad: f64, unidad: &str) -> Result<(), String> {
+        sqlx::query("UPDATE stock_items SET nombre = ?, cantidad = ?, unidad = ? WHERE id = ?")
+            .bind(nombre)
+            .bind(cantidad)
+            .bind(unidad)
+            .bind(id)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error updating stock item: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn delete_stock_item(&self, id: i32) -> Result<(), String> {
+        sqlx::query("DELETE FROM stock_items WHERE id = ?")
+            .bind(id)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error deleting stock item: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn get_item_ingredientes(&self, item_id: i32) -> Result<Vec<ItemIngrediente>, String> {
+        let rows = sqlx::query_as::<_, (i32, String, f64, String)>(
+            "SELECT s.id, s.nombre, ii.cantidad, s.unidad
+             FROM item_ingredientes ii
+             JOIN stock_items s ON ii.stock_item_id = s.id
+             WHERE ii.item_id = ?
+             ORDER BY s.nombre"
+        )
+        .bind(item_id)
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(rows.into_iter().map(|(stock_item_id, nombre, cantidad, unidad)| ItemIngrediente {
+            stock_item_id, nombre, cantidad, unidad,
+        }).collect())
+    }
+
+    pub async fn set_item_ingredientes(&self, item_id: i32, ingredientes: &[(i32, f64)]) -> Result<(), String> {
+        sqlx::query("DELETE FROM item_ingredientes WHERE item_id = ?")
+            .bind(item_id)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error clearing ingredientes: {}", e))?;
+
+        for &(stock_item_id, cantidad) in ingredientes {
+            sqlx::query(
+                "INSERT INTO item_ingredientes (item_id, stock_item_id, cantidad) VALUES (?, ?, ?)"
+            )
+            .bind(item_id)
+            .bind(stock_item_id)
+            .bind(cantidad)
+            .execute(self.db.as_ref())
+            .await
+            .map_err(|e| format!("Error inserting ingrediente: {}", e))?;
+        }
+        Ok(())
+    }
+
+    pub async fn descontar_stock_por_venta(&self, items_vendidos: &[(i32, f64)]) -> Result<(), String> {
+        for &(item_id, qty_vendida) in items_vendidos {
+            let ingredientes = self.get_item_ingredientes(item_id).await?;
+            for ing in ingredientes {
+                sqlx::query(
+                    "UPDATE stock_items SET cantidad = cantidad - ? WHERE id = ?"
+                )
+                .bind(qty_vendida * ing.cantidad)
+                .bind(ing.stock_item_id)
+                .execute(self.db.as_ref())
+                .await
+                .map_err(|e| format!("Error decrementing stock: {}", e))?;
+            }
+        }
+        Ok(())
     }
 
     pub async fn search_orders(

@@ -1,0 +1,38 @@
+/* Design Tokens - Single source of truth for all colors and spacing */
+
+:root {
+  /* Colors */
+  --bg: #0a0a0a;
+  --bg-light: #1a1a1a;
+  --bg-card: rgba(40, 40, 40, 0.6);
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --border: #333333;
+  --accent: #EA580C;
+  --success: #10B981;
+  --success-dark: #059669;
+  --error: #DC2626;
+  --error-bg: rgba(239, 68, 68, 0.1);
+  --btn-primary: #3B82F6;
+  --btn-primary-dark: #2563EB;
+  --btn-success: #10B981;
+  --btn-danger: #EF4444;
+
+  /* Spacing and sizing */
+  --topbar-height: 64px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 60px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --gap-sm: 0.5rem;
+  --gap-md: 0.75rem;
+  --gap-lg: 1.5rem;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}

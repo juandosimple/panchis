@@ -1,352 +1,319 @@
-import { useState, useEffect } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { useEffect, useState, useMemo } from "react"
+import { FilePlus, Printer, CheckCircle, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import QuantityInput from "../components/QuantityInput"
+import { useOrdersStore } from "../stores/useOrdersStore"
+import { useItemsStore } from "../stores/useItemsStore"
+import { useClientsStore } from "../stores/useClientsStore"
+import { usePrinterStore } from "../stores/usePrinterStore"
+import { useUIStore } from "../stores/useUIStore"
+import CustomSelect from "../components/CustomSelect"
+import Button from "../components/Button"
 import "../styles/Orders.css"
 
-interface Order {
-  id: number
-  cliente: string
-  items: string
-  precio: number
-  fecha: string
-  hora: string
-  zona: string
-}
+const formatPrecio = (v: number) =>
+  "$" + v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function Orders() {
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const { orders, loading, createOrder, deleteOrder } = useOrdersStore()
+  const loadOrders = useOrdersStore((s) => s.loadOrders)
+  const { items } = useItemsStore()
+  const loadItems = useItemsStore((s) => s.loadItems)
+  const { clientes } = useClientsStore()
+  const loadClientes = useClientsStore((s) => s.loadClientes)
+  const { printOrder, loadPorts } = usePrinterStore()
+  const { ordersView, categoriasActivas } = useUIStore()
+
   const [error, setError] = useState("")
-  const [showFilters, setShowFilters] = useState(false)
+  const [success, setSuccess] = useState("")
 
-  const [formData, setFormData] = useState({
-    cliente: "",
-    items: "",
-    precio: "",
-    fecha: new Date().toISOString().split("T")[0],
-    hora: new Date().toTimeString().split(" ")[0],
-    zona: "",
-  })
+  // POS form state
+  const [zona, setZona] = useState("")
+  const [selectedClienteId, setSelectedClienteId] = useState("")
+  const [selectedItems, setSelectedItems] = useState<Map<number, number>>(new Map())
+  const [metodoPago, setMetodoPago] = useState("Efectivo")
 
-  const [filters, setFilters] = useState({
-    search: "",
-    fecha_from: "",
-    fecha_to: "",
-    zona: "",
-  })
+  // Historial state
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
 
   useEffect(() => {
     loadOrders()
+    loadItems()
+    loadClientes()
+    loadPorts()
   }, [])
 
-  const loadOrders = async () => {
-    try {
-      setLoading(true)
-      let result: Order[]
+  const notify = (msg: string, isError = false) => {
+    if (isError) { setError(msg); setTimeout(() => setError(""), 4000) }
+    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000) }
+  }
 
-      // Si hay filtros activos, usar búsqueda
-      if (filters.search || filters.fecha_from || filters.fecha_to || filters.zona) {
-        result = await invoke<Order[]>("search_orders", {
-          request: {
-            search: filters.search || null,
-            fecha_from: filters.fecha_from || null,
-            fecha_to: filters.fecha_to || null,
-            zona: filters.zona || null,
-          },
-        })
-      } else {
-        result = await invoke<Order[]>("get_orders")
-      }
+  // POS helpers
+  const itemsEnCategoria = useMemo(
+    () => categoriasActivas === "Todos" ? items : items.filter((i) => i.categoria === categoriasActivas),
+    [items, categoriasActivas]
+  )
 
-      setOrders(result)
-    } catch (err) {
-      setError(`Error loading orders: ${err}`)
-    } finally {
-      setLoading(false)
+  const total = useMemo(() => {
+    let t = 0
+    selectedItems.forEach((qty, id) => {
+      const item = items.find((i) => i.id === id)
+      if (item) t += item.precio * qty
+    })
+    return t
+  }, [selectedItems, items])
+
+  const updateQty = (id: number, qty: number) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev)
+      qty <= 0 ? next.delete(id) : next.set(id, qty)
+      return next
+    })
+  }
+
+  const generarItemsText = () =>
+    Array.from(selectedItems.entries())
+      .map(([id, qty]) => {
+        const item = items.find((i) => i.id === id)
+        return item ? `${qty}x ${item.nombre}` : null
+      })
+      .filter(Boolean)
+      .join("\n")
+
+  const getClienteLabel = () => {
+    const c = clientes.find((c) => c.id.toString() === selectedClienteId)
+    return c ? `${c.nombre} — ${c.zona}` : ""
+  }
+
+  const handleClienteChange = (id: string) => {
+    setSelectedClienteId(id)
+    if (id) {
+      const c = clientes.find((c) => c.id.toString() === id)
+      if (c?.zona) setZona(c.zona)
+    } else {
+      setZona("")
     }
   }
 
-  const handleFilterChange = async () => {
-    await loadOrders()
-  }
-
-  const resetFilters = async () => {
-    setFilters({
-      search: "",
-      fecha_from: "",
-      fecha_to: "",
-      zona: "",
-    })
+  const resetForm = () => {
+    setZona("")
+    setSelectedClienteId("")
+    setSelectedItems(new Map())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
-
+    if (!zona || selectedItems.size === 0) {
+      notify("Ingresa zona y selecciona al menos un item", true)
+      return
+    }
+    const now = new Date()
     try {
-      if (editingId) {
-        await invoke("update_order", {
-          id: editingId,
-          request: {
-            ...formData,
-            precio: parseFloat(formData.precio),
-          },
-        })
-      } else {
-        await invoke("create_order", {
-          request: {
-            ...formData,
-            precio: parseFloat(formData.precio),
-          },
-        })
-      }
-
-      setFormData({
-        cliente: "",
-        items: "",
-        precio: "",
-        fecha: new Date().toISOString().split("T")[0],
-        hora: new Date().toTimeString().split(" ")[0],
-        zona: "",
+      await createOrder({
+        cliente: selectedClienteId ? getClienteLabel() : `Cliente #${Date.now()}`,
+        items: generarItemsText(),
+        precio: total,
+        fecha: now.toISOString().split("T")[0],
+        hora: now.toTimeString().split(" ")[0],
+        zona,
+        itemsVendidos: Array.from(selectedItems.entries()).map(([itemId, cantidad]) => ({ itemId, cantidad })),
       })
-      setEditingId(null)
-      setShowForm(false)
-      await loadOrders()
+      notify("✓ Orden creada exitosamente")
+      resetForm()
     } catch (err) {
-      setError(`Error saving order: ${err}`)
+      notify(`Error: ${err}`, true)
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar esta orden?")) return
-
+  const handlePrint = async (overrideOrder?: { id: number; cliente: string; items: string; precio: number; zona: string; hora: string }) => {
+    const orderData = overrideOrder ?? {
+      id: 0,
+      cliente: selectedClienteId ? getClienteLabel() : `Cliente #${Date.now()}`,
+      items: generarItemsText(),
+      precio: total,
+      zona,
+      hora: new Date().toTimeString().split(" ")[0],
+    }
     try {
-      await invoke("delete_order", { id })
-      await loadOrders()
+      await printOrder(orderData as Parameters<typeof printOrder>[0], metodoPago)
+      notify("✓ Orden impresa exitosamente")
     } catch (err) {
-      setError(`Error deleting order: ${err}`)
+      notify(`${err}`, true)
     }
   }
 
-  const handleEdit = (order: Order) => {
-    setFormData({
-      cliente: order.cliente,
-      items: order.items,
-      precio: order.precio.toString(),
-      fecha: order.fecha,
-      hora: order.hora,
-      zona: order.zona,
+  // Historial helpers
+  const navigateDate = (delta: number) => {
+    const d = new Date(selectedDate + "T12:00:00")
+    d.setDate(d.getDate() + delta)
+    setSelectedDate(d.toISOString().split("T")[0])
+  }
+
+  const isToday = selectedDate === new Date().toISOString().split("T")[0]
+
+  const formatDateDisplay = (s: string) =>
+    new Date(s + "T12:00:00").toLocaleDateString("es-AR", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
     })
-    setEditingId(order.id)
-    setShowForm(true)
+
+  const dayOrders = useMemo(() => orders.filter((o) => o.fecha === selectedDate), [orders, selectedDate])
+  const dayTotal = useMemo(() => dayOrders.reduce((s, o) => s + o.precio, 0), [dayOrders])
+
+  const getCategoriaEmoji = (cat: string) =>
+    ({ Panchis: "🌭", Promos: "🎁", Bebidas: "🥤" }[cat] ?? "🍽️")
+
+  if (loading && orders.length === 0 && items.length === 0) {
+    return <div className="loading">Cargando...</div>
   }
 
-  if (loading && orders.length === 0) {
-    return <div className="loading">Cargando órdenes...</div>
-  }
+  // ── HISTORIAL VIEW ─────────────────────────────────────────────────────────
+  if (ordersView === "historial") {
+    return (
+      <div className="historial-container">
+        {error && <div className="error-message">{error}</div>}
+        {success && <div className="success-message">{success}</div>}
 
-  return (
-    <div className="orders-container">
-      <div className="orders-header">
-        <h2>📋 Órdenes</h2>
-        <div className="header-buttons">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="btn-secondary"
-          >
-            🔍 {showFilters ? "Ocultar" : "Mostrar"} Filtros
-          </button>
-          <button
-            onClick={() => {
-              setShowForm(!showForm)
-              if (showForm) setEditingId(null)
-            }}
-            className="btn-primary"
-          >
-            {showForm ? "Cancelar" : "+ Nueva Orden"}
-          </button>
+        <div className="historial-date-nav">
+          <button className="page-btn" onClick={() => navigateDate(-1)}><ChevronLeft size={18} /></button>
+          <span className="historial-date-label">{formatDateDisplay(selectedDate)}</span>
+          <button className="page-btn" onClick={() => navigateDate(1)} disabled={isToday}><ChevronRight size={18} /></button>
+        </div>
+
+        <div className="historial-stats-row">
+          <span className="historial-stat"><span className="historial-stat-label">Órdenes</span> {dayOrders.length}</span>
+          <span className="historial-stat"><span className="historial-stat-label">Total del día</span> {formatPrecio(dayTotal)}</span>
+        </div>
+
+        <div className="historial-table-wrapper">
+          {dayOrders.length === 0 ? (
+            <p className="no-data">No hay órdenes para este día</p>
+          ) : (
+            <table className="orders-table">
+              <thead>
+                <tr><th>#</th><th>Cliente</th><th>Zona</th><th>Items</th><th>Hora</th><th>Total</th><th></th></tr>
+              </thead>
+              <tbody>
+                {dayOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td>#{order.id}</td>
+                    <td>{order.cliente}</td>
+                    <td>{order.zona}</td>
+                    <td className="items-cell">{order.items}</td>
+                    <td>{order.hora}</td>
+                    <td className="precio-cell">{formatPrecio(order.precio)}</td>
+                    <td className="actions-cell">
+                      <button className="btn-small btn-edit" title="Imprimir" onClick={() => handlePrint(order)}><Printer size={14} /></button>
+                      <button className="btn-small btn-delete" title="Eliminar" onClick={() => deleteOrder(order.id)}><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+    )
+  }
 
+  // ── POS VIEW ───────────────────────────────────────────────────────────────
+  return (
+    <div className="pos-container">
       {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
 
-      {showFilters && (
-        <div className="filters-panel">
-          <div className="filter-row">
-            <div className="filter-group">
-              <label htmlFor="search">Buscar por cliente o items</label>
-              <input
-                id="search"
-                type="text"
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                placeholder="Cliente, items..."
-              />
-            </div>
-            <div className="filter-group">
-              <label htmlFor="fecha_from">Desde</label>
-              <input
-                id="fecha_from"
-                type="date"
-                value={filters.fecha_from}
-                onChange={(e) => setFilters({ ...filters, fecha_from: e.target.value })}
-              />
-            </div>
-            <div className="filter-group">
-              <label htmlFor="fecha_to">Hasta</label>
-              <input
-                id="fecha_to"
-                type="date"
-                value={filters.fecha_to}
-                onChange={(e) => setFilters({ ...filters, fecha_to: e.target.value })}
-              />
-            </div>
-            <div className="filter-group">
-              <label htmlFor="zona">Zona</label>
-              <input
-                id="zona"
-                type="text"
-                value={filters.zona}
-                onChange={(e) => setFilters({ ...filters, zona: e.target.value })}
-                placeholder="Zona"
-              />
-            </div>
+      <div className="pos-layout">
+        {/* Left: Menu grid */}
+        <div className="pos-menu">
+          <div className="menu-total-bar">
+            <span className="menu-total-title"><FilePlus size={16} /> Nueva Orden</span>
+            {total > 0 && (
+              <span className="menu-total-value">
+                <span className="menu-total-label">Total</span> {formatPrecio(total)}
+              </span>
+            )}
           </div>
-          <div className="filter-actions">
-            <button onClick={handleFilterChange} className="btn-filter">
-              Aplicar Filtros
-            </button>
-            <button onClick={resetFilters} className="btn-reset">
-              Limpiar
-            </button>
+          <div className="menu-grid">
+            {itemsEnCategoria.map((item) => {
+              const qty = selectedItems.get(item.id) ?? 0
+              return (
+                <div key={item.id} className={`menu-card ${qty > 0 ? "selected" : ""}`}>
+                  <div className="card-emoji">{getCategoriaEmoji(item.categoria)}</div>
+                  <h3>{item.nombre}</h3>
+                  <p className="card-price">{formatPrecio(item.precio)}</p>
+                  <QuantityInput
+                    value={qty}
+                    onChange={(v) => updateQty(item.id, v)}
+                    min={0}
+                    className="menu-qty"
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
-      )}
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="order-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="cliente">Cliente</label>
-              <input
-                id="cliente"
-                type="text"
-                value={formData.cliente}
-                onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                placeholder="Nombre del cliente"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="zona">Zona</label>
-              <input
-                id="zona"
-                type="text"
-                value={formData.zona}
-                onChange={(e) => setFormData({ ...formData, zona: e.target.value })}
-                placeholder="Zona de entrega"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="items">Items</label>
-            <textarea
-              id="items"
-              value={formData.items}
-              onChange={(e) => setFormData({ ...formData, items: e.target.value })}
-              placeholder="Ejemplo: 2x Pancho con queso, 1x Refresco"
-              required
+        {/* Right: Order form */}
+        <div className="pos-panel">
+          <form onSubmit={handleSubmit} className="panel-form">
+            <CustomSelect
+              label="Cliente"
+              value={selectedClienteId}
+              onChange={handleClienteChange}
+              placeholder="Nuevo cliente (auto)"
+              options={[
+                { value: "", label: "Nuevo cliente (auto)" },
+                ...clientes.map((c) => ({ value: c.id.toString(), label: `${c.nombre} — ${c.zona}` })),
+              ]}
             />
-          </div>
-
-          <div className="form-row">
             <div className="form-group">
-              <label htmlFor="precio">Precio</label>
-              <input
-                id="precio"
-                type="number"
-                step="0.01"
-                value={formData.precio}
-                onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
-                placeholder="0.00"
-                required
-              />
+              <label htmlFor="zona">Zona (Dirección)</label>
+              <input id="zona" type="text" value={zona}
+                onChange={(e) => setZona(e.target.value)}
+                placeholder="Ingresa la zona o dirección" required />
             </div>
-            <div className="form-group">
-              <label htmlFor="fecha">Fecha</label>
-              <input
-                id="fecha"
-                type="date"
-                value={formData.fecha}
-                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="hora">Hora</label>
-              <input
-                id="hora"
-                type="time"
-                value={formData.hora}
-                onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
-                required
-              />
-            </div>
-          </div>
+            <CustomSelect
+              label="Método de Pago"
+              value={metodoPago}
+              onChange={setMetodoPago}
+              options={[
+                { value: "Efectivo", label: "Efectivo" },
+                { value: "Transferencia", label: "Transferencia" },
+              ]}
+            />
 
-          <button type="submit" className="btn-submit">
-            {editingId ? "Actualizar Orden" : "Crear Orden"}
-          </button>
-        </form>
-      )}
+            <div className="panel-divider" />
 
-      <div className="orders-list">
-        {orders.length === 0 ? (
-          <p className="no-data">No hay órdenes. ¡Crea tu primera orden!</p>
-        ) : (
-          <table className="orders-table">
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Items</th>
-                <th>Precio</th>
-                <th>Fecha</th>
-                <th>Hora</th>
-                <th>Zona</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id}>
-                  <td>{order.cliente}</td>
-                  <td className="items-cell">{order.items}</td>
-                  <td className="precio-cell">${order.precio.toFixed(2)}</td>
-                  <td>{order.fecha}</td>
-                  <td>{order.hora}</td>
-                  <td>{order.zona}</td>
-                  <td className="actions-cell">
-                    <button
-                      onClick={() => handleEdit(order)}
-                      className="btn-small btn-edit"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(order.id)}
-                      className="btn-small btn-delete"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            <div className="order-items">
+              {selectedItems.size === 0 ? (
+                <p className="no-items">Selecciona items del menú</p>
+              ) : (
+                Array.from(selectedItems.entries()).map(([id, qty]) => {
+                  const item = items.find((i) => i.id === id)
+                  if (!item) return null
+                  return (
+                    <div key={id} className="order-item">
+                      <span className="item-name">{qty}x {item.nombre}</span>
+                      <span className="item-price">{formatPrecio(item.precio * qty)}</span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="panel-divider" />
+
+            <div className="btn-row">
+              <Button icon={Printer} variant="primary" size="md"
+                disabled={selectedItems.size === 0 || !zona}
+                onClick={() => handlePrint()} title="Imprimir antes de confirmar">
+                Imprimir
+              </Button>
+              <Button icon={CheckCircle} variant="success" size="md" type="submit"
+                disabled={selectedItems.size === 0 || !zona}>
+                Crear Orden
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )

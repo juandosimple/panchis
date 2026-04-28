@@ -1,13 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::auth::{hash_password, verify_password, create_token, verify_token};
-use crate::db::{AppState, Order, Cliente, Item, DailySales, ZoneSales};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AuthRequest {
-    pub username: String,
-    pub password: String,
-}
+use crate::db::{AppState, Order, Cliente, Item, DailySales, ZoneSales, StockItem, ItemIngrediente};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthResponse {
@@ -120,6 +114,14 @@ pub fn verify_auth_token(token: String) -> Result<bool, String> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemVendido {
+    pub item_id: i32,
+    pub cantidad: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateOrderRequest {
     pub cliente: String,
     pub items: String,
@@ -127,6 +129,7 @@ pub struct CreateOrderRequest {
     pub fecha: String,
     pub hora: String,
     pub zona: String,
+    pub items_vendidos: Option<Vec<ItemVendido>>,
 }
 
 #[tauri::command]
@@ -134,6 +137,12 @@ pub async fn create_order(
     request: CreateOrderRequest,
     state: State<'_, AppState>,
 ) -> Result<i32, String> {
+    let items_vendidos: Vec<(i32, f64)> = request.items_vendidos
+        .unwrap_or_default()
+        .iter()
+        .map(|iv| (iv.item_id, iv.cantidad))
+        .collect();
+
     state.create_order(
         &request.cliente,
         &request.items,
@@ -141,6 +150,7 @@ pub async fn create_order(
         &request.fecha,
         &request.hora,
         &request.zona,
+        &items_vendidos,
     ).await
 }
 
@@ -232,6 +242,7 @@ pub struct CreateItemRequest {
     pub nombre: String,
     pub precio: f64,
     pub descripcion: String,
+    pub categoria: String,
 }
 
 #[tauri::command]
@@ -243,6 +254,7 @@ pub async fn create_item(
         &request.nombre,
         request.precio,
         &request.descripcion,
+        &request.categoria,
     ).await
 }
 
@@ -267,6 +279,7 @@ pub async fn update_item(
         &request.nombre,
         request.precio,
         &request.descripcion,
+        &request.categoria,
     ).await
 }
 
@@ -309,4 +322,93 @@ pub async fn search_orders(
         request.fecha_to.as_deref(),
         request.zona.as_deref(),
     ).await
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateStockItemRequest {
+    pub nombre: String,
+    pub cantidad: f64,
+    pub unidad: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct IngredienteInput {
+    pub stock_item_id: i32,
+    pub cantidad: f64,
+}
+
+#[tauri::command]
+pub async fn create_stock_item(
+    request: CreateStockItemRequest,
+    state: State<'_, AppState>,
+) -> Result<i32, String> {
+    state.create_stock_item(&request.nombre, request.cantidad, &request.unidad).await
+}
+
+#[tauri::command]
+pub async fn get_stock_items(state: State<'_, AppState>) -> Result<Vec<StockItem>, String> {
+    state.get_stock_items().await
+}
+
+#[tauri::command]
+pub async fn update_stock_item(
+    id: i32,
+    request: CreateStockItemRequest,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.update_stock_item(id, &request.nombre, request.cantidad, &request.unidad).await
+}
+
+#[tauri::command]
+pub async fn delete_stock_item(id: i32, state: State<'_, AppState>) -> Result<(), String> {
+    state.delete_stock_item(id).await
+}
+
+#[tauri::command]
+pub async fn get_item_ingredientes(
+    item_id: i32,
+    state: State<'_, AppState>,
+) -> Result<Vec<ItemIngrediente>, String> {
+    state.get_item_ingredientes(item_id).await
+}
+
+#[tauri::command]
+pub async fn set_item_ingredientes(
+    item_id: i32,
+    ingredientes: Vec<IngredienteInput>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let pairs: Vec<(i32, f64)> = ingredientes.iter().map(|i| (i.stock_item_id, i.cantidad)).collect();
+    state.set_item_ingredientes(item_id, &pairs).await
+}
+
+#[tauri::command]
+pub fn print_order(
+    numero: i32,
+    cliente: String,
+    items: String,
+    total: f64,
+    zona: String,
+    hora: String,
+    metodoPago: String,
+    port: String,
+) -> Result<String, String> {
+    let order = crate::printer::OrderReceipt {
+        numero,
+        cliente,
+        items,
+        total,
+        zona,
+        hora,
+        metodo_pago: metodoPago,
+    };
+
+    crate::printer::print_order(order, &port)?;
+    Ok("Orden impresa exitosamente".to_string())
+}
+
+#[tauri::command]
+pub fn get_printer_ports() -> Result<Vec<String>, String> {
+    crate::printer::get_available_ports()
 }

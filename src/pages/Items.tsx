@@ -1,202 +1,116 @@
-import { useState, useEffect } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { useEffect, useState } from "react"
+import { Package, Plus, X, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Item } from "../types"
+import { useItemsStore } from "../stores/useItemsStore"
+import Button from "../components/Button"
+import ItemForm from "../components/ItemForm"
+import PageHeader from "../components/PageHeader"
 import "../styles/Items.css"
 
-interface Item {
-  id: number
-  nombre: string
-  precio: number
-  descripcion: string
-}
+const PAGE_SIZE = 15
 
 export default function Items() {
-  const [items, setItems] = useState<Item[]>([])
-  const [loading, setLoading] = useState(true)
+  const { items, loading, deleteItem } = useItemsStore()
+  const loadItems = useItemsStore((s) => s.loadItems)
   const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editing, setEditing] = useState<Item | null>(null)
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [page, setPage] = useState(1)
 
-  const [formData, setFormData] = useState({
-    nombre: "",
-    precio: "",
-    descripcion: "",
-  })
+  useEffect(() => { loadItems() }, [])
 
-  useEffect(() => {
-    loadItems()
-  }, [])
-
-  const loadItems = async () => {
-    try {
-      setLoading(true)
-      const result = await invoke<Item[]>("get_items")
-      setItems(result)
-    } catch (err) {
-      setError(`Error loading items: ${err}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-
-    try {
-      if (editingId) {
-        await invoke("update_item", {
-          id: editingId,
-          request: {
-            ...formData,
-            precio: parseFloat(formData.precio),
-          },
-        })
-      } else {
-        await invoke("create_item", {
-          request: {
-            ...formData,
-            precio: parseFloat(formData.precio),
-          },
-        })
-      }
-
-      setFormData({
-        nombre: "",
-        precio: "",
-        descripcion: "",
-      })
-      setEditingId(null)
-      setShowForm(false)
-      await loadItems()
-    } catch (err) {
-      setError(`Error saving item: ${err}`)
-    }
+  const handleEdit = (item: Item) => {
+    setEditing(item)
+    setShowForm(true)
   }
 
   const handleDelete = async (id: number) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este item?")) return
-
     try {
-      await invoke("delete_item", { id })
-      await loadItems()
+      await deleteItem(id)
     } catch (err) {
-      setError(`Error deleting item: ${err}`)
+      setError(`Error: ${err}`)
     }
   }
 
-  const handleEdit = (item: Item) => {
-    setFormData({
-      nombre: item.nombre,
-      precio: item.precio.toString(),
-      descripcion: item.descripcion,
-    })
-    setEditingId(item.id)
-    setShowForm(true)
+  const handleFormDone = () => {
+    setSuccess(editing ? "✓ Item actualizado" : "✓ Item creado")
+    setTimeout(() => setSuccess(""), 3000)
+    setShowForm(false)
+    setEditing(null)
   }
 
-  if (loading && items.length === 0) {
-    return <div className="loading">Cargando items...</div>
-  }
+  if (loading && items.length === 0) return <div className="loading">Cargando items...</div>
+
+  const totalPages = Math.ceil(items.length / PAGE_SIZE)
+  const paginated = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div className="items-container">
-      <div className="items-header">
-        <h2>🍴 Items/Productos</h2>
-        <button
-          onClick={() => {
-            setShowForm(!showForm)
-            if (showForm) setEditingId(null)
-          }}
-          className="btn-primary"
-        >
-          {showForm ? "Cancelar" : "+ Nuevo Item"}
-        </button>
-      </div>
+      <PageHeader
+        icon={<Package size={28} style={{ marginRight: "0.5rem", verticalAlign: "middle" }} />}
+        title="Items/Productos"
+        action={
+          <Button
+            icon={showForm ? X : Plus}
+            variant={showForm ? "secondary" : "success"}
+            size="sm"
+            onClick={() => { setShowForm(!showForm); if (showForm) setEditing(null) }}
+          >
+            {showForm ? "Cancelar" : "Nuevo Item"}
+          </Button>
+        }
+      />
 
       {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="item-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="nombre">Nombre del Item</label>
-              <input
-                id="nombre"
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Ejemplo: Pancho con queso"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="precio">Precio</label>
-              <input
-                id="precio"
-                type="number"
-                step="0.01"
-                value={formData.precio}
-                onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
-                placeholder="0.00"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="descripcion">Descripción</label>
-            <input
-              id="descripcion"
-              type="text"
-              value={formData.descripcion}
-              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-              placeholder="Descripción del item"
-            />
-          </div>
-
-          <button type="submit" className="btn-submit">
-            {editingId ? "Actualizar Item" : "Crear Item"}
-          </button>
-        </form>
+        <ItemForm
+          editing={editing}
+          onDone={handleFormDone}
+        />
       )}
 
       <div className="items-list">
         {items.length === 0 ? (
           <p className="no-data">No hay items. ¡Agrega tu primer item!</p>
         ) : (
-          <table className="items-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Precio</th>
-                <th>Descripción</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td className="nombre-cell">{item.nombre}</td>
-                  <td className="precio-cell">${item.precio.toFixed(2)}</td>
-                  <td className="desc-cell">{item.descripcion}</td>
-                  <td className="actions-cell">
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="btn-small btn-edit"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="btn-small btn-delete"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+          <>
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th><th>Precio</th><th>Categoría</th><th>Descripción</th><th>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginated.map((item) => (
+                  <tr key={item.id}>
+                    <td className="nombre-cell">{item.nombre}</td>
+                    <td className="precio-cell">${item.precio.toFixed(2)}</td>
+                    <td className="categoria-cell">{item.categoria}</td>
+                    <td className="desc-cell">{item.descripcion}</td>
+                    <td className="actions-cell">
+                      <button onClick={() => handleEdit(item)} className="btn-small btn-edit"><Pencil size={14} /></button>
+                      <button onClick={() => handleDelete(item.id)} className="btn-small btn-delete"><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="page-info">{page} / {totalPages}</span>
+                <button className="page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

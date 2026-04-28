@@ -1,116 +1,106 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
+import { useAuthStore } from "./stores/useAuthStore"
+import { useUIStore } from "./stores/useUIStore"
+import { useOrdersStore } from "./stores/useOrdersStore"
+import { useItemsStore } from "./stores/useItemsStore"
 import Login from "./pages/Login"
 import Orders from "./pages/Orders"
 import Clientes from "./pages/Clientes"
 import Items from "./pages/Items"
+import Stock from "./pages/Stock"
 import Reportes from "./pages/Reportes"
+import Sidebar from "./components/Sidebar"
+import TopBar from "./components/TopBar"
+import NavBar from "./components/NavBar"
+import OrdersModal from "./components/OrdersModal"
+import "./styles/tokens.css"
 import "./App.css"
 
-type Page = "dashboard" | "orders" | "clientes" | "items" | "reportes"
-
-function App() {
-  const [token, setToken] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard")
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem("auth_token")
-    setToken(savedToken)
-    setLoading(false)
-  }, [])
-
-  const handleLogout = () => {
-    localStorage.removeItem("auth_token")
-    setToken(null)
-    setCurrentPage("dashboard")
-  }
-
-  if (loading) {
-    return <div className="loading">Cargando...</div>
-  }
-
-  if (!token) {
-    return <Login onLoginSuccess={setToken} />
-  }
-
+function Dashboard() {
+  const setCurrentPage = useUIStore((s) => s.setCurrentPage)
   return (
-    <main className="dashboard">
-      <div className="navbar">
-        <h1>🌮 Panchis</h1>
-        <nav className="nav-menu">
-          <button
-            onClick={() => setCurrentPage("dashboard")}
-            className={currentPage === "dashboard" ? "nav-btn active" : "nav-btn"}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setCurrentPage("orders")}
-            className={currentPage === "orders" ? "nav-btn active" : "nav-btn"}
-          >
-            📋 Órdenes
-          </button>
-          <button
-            onClick={() => setCurrentPage("clientes")}
-            className={currentPage === "clientes" ? "nav-btn active" : "nav-btn"}
-          >
-            👥 Clientes
-          </button>
-          <button
-            onClick={() => setCurrentPage("items")}
-            className={currentPage === "items" ? "nav-btn active" : "nav-btn"}
-          >
-            🍴 Items
-          </button>
-          <button
-            onClick={() => setCurrentPage("reportes")}
-            className={currentPage === "reportes" ? "nav-btn active" : "nav-btn"}
-          >
-            📊 Reportes
-          </button>
-        </nav>
-        <button onClick={handleLogout} className="logout-btn">
-          Cerrar Sesión
-        </button>
+    <div className="container">
+      <h2>Bienvenido a Panchis</h2>
+      <p>Gestor de órdenes para tu negocio de panchos</p>
+      <div className="features">
+        <div className="feature-card" onClick={() => setCurrentPage("orders")}>
+          <h3>📋 Órdenes</h3>
+          <p>Crea y gestiona órdenes</p>
+        </div>
+        <div className="feature-card" onClick={() => setCurrentPage("clientes")}>
+          <h3>👥 Clientes</h3>
+          <p>Administra tus clientes</p>
+        </div>
+        <div className="feature-card" onClick={() => setCurrentPage("items")}>
+          <h3>🍴 Items</h3>
+          <p>Gestiona tu catálogo</p>
+        </div>
+        <div className="feature-card" onClick={() => setCurrentPage("reportes")}>
+          <h3>📊 Reportes</h3>
+          <p>Visualiza tus estadísticas</p>
+        </div>
       </div>
-
-      <div className="page-content">
-        {currentPage === "dashboard" && (
-          <div className="container">
-            <h2>Bienvenido a Panchis</h2>
-            <p>Gestor de órdenes para tu negocio de panchos</p>
-
-            <div className="features">
-              <div className="feature-card" onClick={() => setCurrentPage("orders")}>
-                <h3>📋 Órdenes</h3>
-                <p>Crea y gestiona órdenes</p>
-              </div>
-              <div className="feature-card" onClick={() => setCurrentPage("clientes")}>
-                <h3>👥 Clientes</h3>
-                <p>Administra tus clientes</p>
-              </div>
-              <div className="feature-card" onClick={() => setCurrentPage("items")}>
-                <h3>🍴 Items</h3>
-                <p>Gestiona tu catálogo</p>
-              </div>
-              <div className="feature-card" onClick={() => setCurrentPage("reportes")}>
-                <h3>📊 Reportes</h3>
-                <p>Visualiza tus estadísticas</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {currentPage === "orders" && <Orders />}
-
-        {currentPage === "clientes" && <Clientes />}
-
-        {currentPage === "items" && <Items />}
-
-        {currentPage === "reportes" && <Reportes />}
-      </div>
-    </main>
+    </div>
   )
 }
 
-export default App
+function Configuracion() {
+  const logout = useAuthStore((s) => s.logout)
+  return (
+    <div className="container">
+      <h2>⚙️ Configuración</h2>
+      <div className="config-section">
+        <div className="config-card">
+          <h3>Puerto de Impresora</h3>
+          <p className="config-text">Configura el puerto de tu impresora térmica</p>
+          <p className="config-text">El puerto será detectado automáticamente.</p>
+          <div className="config-divider">
+            <button onClick={logout} className="logout-btn logout-btn-full">Cerrar Sesión</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const PAGE_MAP = {
+  dashboard:    <Dashboard />,
+  orders:       <Orders />,
+  clientes:     <Clientes />,
+  items:        <Items />,
+  stock:        <Stock />,
+  reportes:     <Reportes />,
+  configuracion: <Configuracion />,
+} as const
+
+export default function App() {
+  const token = useAuthStore((s) => s.token)
+  const { currentPage, showOrdersModal } = useUIStore()
+  const loadOrders = useOrdersStore((s) => s.loadOrders)
+  const loadItems = useItemsStore((s) => s.loadItems)
+
+  // Bootstrap on login
+  useEffect(() => {
+    if (!token) return
+    loadOrders()
+    loadItems()
+  }, [token])
+
+  if (!token) return <Login />
+
+  return (
+    <div className="app-wrapper">
+      <Sidebar />
+      <div className="right-panel">
+        <TopBar />
+        {currentPage === "orders" && <NavBar />}
+        <main className="dashboard">
+          <div className="page-content">
+            {PAGE_MAP[currentPage]}
+          </div>
+        </main>
+        {showOrdersModal && <OrdersModal />}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,79 @@
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-sm);
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+/* Sizes */
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.btn-md {
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+}
+
+.btn-lg {
+  padding: 1.25rem 1.5rem;
+  font-size: 1rem;
+}
+
+/* Variants */
+.btn.btn-primary {
+  background: linear-gradient(135deg, var(--btn-primary) 0%, var(--btn-primary-dark) 100%);
+  color: white;
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.4);
+}
+
+.btn.btn-success {
+  background: linear-gradient(135deg, var(--btn-success) 0%, var(--success-dark) 100%);
+  color: white;
+}
+
+.btn.btn-success:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.4);
+}
+
+.btn.btn-danger {
+  background: linear-gradient(135deg, var(--btn-danger) 0%, var(--error) 100%);
+  color: white;
+}
+
+.btn.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.4);
+}
+
+.btn.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+/* Disabled state */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

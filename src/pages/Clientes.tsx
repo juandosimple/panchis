@@ -1,212 +1,107 @@
-import { useState, useEffect } from "react"
-import { invoke } from "@tauri-apps/api/core"
+import { useEffect, useState } from "react"
+import { Users, Plus, X, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Cliente } from "../types"
+import { useClientsStore } from "../stores/useClientsStore"
+import Button from "../components/Button"
+import ClienteForm from "../components/ClienteForm"
+import PageHeader from "../components/PageHeader"
 import "../styles/Clientes.css"
 
-interface Cliente {
-  id: number
-  nombre: string
-  telefono: string
-  direccion: string
-  zona: string
-}
+const PAGE_SIZE = 15
 
 export default function Clientes() {
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [loading, setLoading] = useState(true)
+  const { clientes, loading, deleteCliente } = useClientsStore()
+  const loadClientes = useClientsStore((s) => s.loadClientes)
   const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editing, setEditing] = useState<Cliente | null>(null)
   const [error, setError] = useState("")
+  const [page, setPage] = useState(1)
 
-  const [formData, setFormData] = useState({
-    nombre: "",
-    telefono: "",
-    direccion: "",
-    zona: "",
-  })
+  useEffect(() => { loadClientes() }, [])
 
-  useEffect(() => {
-    loadClientes()
-  }, [])
-
-  const loadClientes = async () => {
-    try {
-      setLoading(true)
-      const result = await invoke<Cliente[]>("get_clientes")
-      setClientes(result)
-    } catch (err) {
-      setError(`Error loading clientes: ${err}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-
-    try {
-      if (editingId) {
-        await invoke("update_cliente", {
-          id: editingId,
-          request: formData,
-        })
-      } else {
-        await invoke("create_cliente", {
-          request: formData,
-        })
-      }
-
-      setFormData({
-        nombre: "",
-        telefono: "",
-        direccion: "",
-        zona: "",
-      })
-      setEditingId(null)
-      setShowForm(false)
-      await loadClientes()
-    } catch (err) {
-      setError(`Error saving cliente: ${err}`)
-    }
+  const handleEdit = (cliente: Cliente) => {
+    setEditing(cliente)
+    setShowForm(true)
   }
 
   const handleDelete = async (id: number) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este cliente?")) return
-
     try {
-      await invoke("delete_cliente", { id })
-      await loadClientes()
+      await deleteCliente(id)
     } catch (err) {
-      setError(`Error deleting cliente: ${err}`)
+      setError(`Error: ${err}`)
     }
   }
 
-  const handleEdit = (cliente: Cliente) => {
-    setFormData({
-      nombre: cliente.nombre,
-      telefono: cliente.telefono,
-      direccion: cliente.direccion,
-      zona: cliente.zona,
-    })
-    setEditingId(cliente.id)
-    setShowForm(true)
-  }
+  if (loading && clientes.length === 0) return <div className="loading">Cargando clientes...</div>
 
-  if (loading && clientes.length === 0) {
-    return <div className="loading">Cargando clientes...</div>
-  }
+  const totalPages = Math.ceil(clientes.length / PAGE_SIZE)
+  const paginated = clientes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div className="clientes-container">
-      <div className="clientes-header">
-        <h2>👥 Clientes</h2>
-        <button
-          onClick={() => {
-            setShowForm(!showForm)
-            if (showForm) setEditingId(null)
-          }}
-          className="btn-primary"
-        >
-          {showForm ? "Cancelar" : "+ Nuevo Cliente"}
-        </button>
-      </div>
+      <PageHeader
+        icon={<Users size={28} style={{ marginRight: "0.5rem", verticalAlign: "middle" }} />}
+        title="Clientes"
+        action={
+          <Button
+            icon={showForm ? X : Plus}
+            variant={showForm ? "secondary" : "success"}
+            size="sm"
+            onClick={() => { setShowForm(!showForm); if (showForm) setEditing(null) }}
+          >
+            {showForm ? "Cancelar" : "Nuevo Cliente"}
+          </Button>
+        }
+      />
 
       {error && <div className="error-message">{error}</div>}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="cliente-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="nombre">Nombre</label>
-              <input
-                id="nombre"
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Nombre del cliente"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="telefono">Teléfono</label>
-              <input
-                id="telefono"
-                type="tel"
-                value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                placeholder="+1234567890"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="direccion">Dirección</label>
-            <input
-              id="direccion"
-              type="text"
-              value={formData.direccion}
-              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-              placeholder="Dirección completa"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="zona">Zona</label>
-            <input
-              id="zona"
-              type="text"
-              value={formData.zona}
-              onChange={(e) => setFormData({ ...formData, zona: e.target.value })}
-              placeholder="Zona de entrega"
-              required
-            />
-          </div>
-
-          <button type="submit" className="btn-submit">
-            {editingId ? "Actualizar Cliente" : "Crear Cliente"}
-          </button>
-        </form>
+        <ClienteForm
+          editing={editing}
+          onDone={() => { setShowForm(false); setEditing(null) }}
+        />
       )}
 
       <div className="clientes-list">
         {clientes.length === 0 ? (
           <p className="no-data">No hay clientes. ¡Agrega tu primer cliente!</p>
         ) : (
-          <table className="clientes-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Teléfono</th>
-                <th>Dirección</th>
-                <th>Zona</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientes.map((cliente) => (
-                <tr key={cliente.id}>
-                  <td className="nombre-cell">{cliente.nombre}</td>
-                  <td>{cliente.telefono}</td>
-                  <td className="direccion-cell">{cliente.direccion}</td>
-                  <td>{cliente.zona}</td>
-                  <td className="actions-cell">
-                    <button
-                      onClick={() => handleEdit(cliente)}
-                      className="btn-small btn-edit"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(cliente.id)}
-                      className="btn-small btn-delete"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+          <>
+            <table className="clientes-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th><th>Teléfono</th><th>Dirección</th><th>Zona</th><th>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginated.map((c) => (
+                  <tr key={c.id}>
+                    <td className="nombre-cell">{c.nombre}</td>
+                    <td>{c.telefono}</td>
+                    <td className="direccion-cell">{c.direccion}</td>
+                    <td>{c.zona}</td>
+                    <td className="actions-cell">
+                      <button onClick={() => handleEdit(c)} className="btn-small btn-edit"><Pencil size={14} /></button>
+                      <button onClick={() => handleDelete(c.id)} className="btn-small btn-delete"><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="page-info">{page} / {totalPages}</span>
+                <button className="page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

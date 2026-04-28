@@ -11,7 +11,12 @@ panchis.db-wal
 
 # Rust
 src-tauri/target/
-Cargo.lock
+
+# TypeScript build artifacts
+tsconfig.tsbuildinfo
+
+# Claude Code
+.claude/
 
 # IDE
 .vscode/
