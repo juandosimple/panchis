@@ -49,12 +49,22 @@ function Configuracion() {
   const [localAddress, setLocalAddress] = useState(
     () => localStorage.getItem("panchis_local_address") ?? ""
   )
+  const [ciudad, setCiudad] = useState(
+    () => localStorage.getItem("panchis_ciudad") ?? "Buenos Aires, Argentina"
+  )
   const [saved, setSaved] = useState(false)
 
   const handleSave = () => {
     localStorage.setItem("panchis_local_address", localAddress)
+    localStorage.setItem("panchis_ciudad", ciudad)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "0.75rem", borderRadius: "8px",
+    border: "1.5px solid var(--border)", background: "rgba(0,0,0,0.3)",
+    color: "var(--text-primary)", fontFamily: "inherit", fontSize: "0.95rem",
   }
 
   return (
@@ -65,12 +75,23 @@ function Configuracion() {
           <h3>Dirección del Local</h3>
           <p className="config-text">Se usa para calcular la distancia a cada entrega</p>
           <div className="form-group" style={{ marginTop: "0.75rem" }}>
+            <label style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>Dirección</label>
             <input
               type="text"
               value={localAddress}
               onChange={(e) => setLocalAddress(e.target.value)}
-              placeholder="Ej: Av. Corrientes 1234, Buenos Aires"
-              style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1.5px solid var(--border)", background: "rgba(0,0,0,0.3)", color: "var(--text-primary)", fontFamily: "inherit", fontSize: "0.95rem" }}
+              placeholder="Ej: Juan B Alberdi 4430, Villa Ballester"
+              style={inputStyle}
+            />
+          </div>
+          <div className="form-group" style={{ marginTop: "0.75rem" }}>
+            <label style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>Ciudad (para geocodificación)</label>
+            <input
+              type="text"
+              value={ciudad}
+              onChange={(e) => setCiudad(e.target.value)}
+              placeholder="Ej: Buenos Aires, Argentina"
+              style={inputStyle}
             />
           </div>
           <button

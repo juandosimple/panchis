@@ -11,8 +11,10 @@ const geocodeCache = new Map<string, { lat: number; lon: number } | null>()
 async function geocode(address: string): Promise<{ lat: number; lon: number } | null> {
   if (geocodeCache.has(address)) return geocodeCache.get(address)!
   try {
+    const ciudad = localStorage.getItem("panchis_ciudad") ?? "Buenos Aires, Argentina"
+    const query = address.toLowerCase().includes("buenos aires") ? address : `${address}, ${ciudad}`
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=ar`,
       { headers: { "Accept-Language": "es", "User-Agent": "Panchis POS App" } }
     )
     const data = await res.json()
