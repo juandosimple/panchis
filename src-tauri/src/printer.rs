@@ -18,12 +18,26 @@ pub struct OrderReceipt {
 
 pub fn print_order(order: OrderReceipt, port_name: &str) -> Result<(), String> {
     let receipt = build_receipt(&order);
-    let tmp_path = std::env::temp_dir().join("panchis_receipt.txt");
-    fs::write(&tmp_path, &receipt).map_err(|e| format!("Error writing temp file: {}", e))?;
 
-    let result = send_to_printer(&tmp_path, port_name);
-    let _ = fs::remove_file(&tmp_path);
-    result
+    #[cfg(target_os = "windows")]
+    {
+        // Wrap with ESC/POS init + cut so the thermal printer ends the job
+        let mut bytes: Vec<u8> = Vec::with_capacity(receipt.len() + 16);
+        bytes.extend_from_slice(&[0x1B, 0x40]);            // ESC @ - initialize
+        bytes.extend_from_slice(receipt.as_bytes());
+        bytes.extend_from_slice(&[0x1B, 0x64, 0x05]);      // ESC d 5 - feed 5 lines
+        bytes.extend_from_slice(&[0x1D, 0x56, 0x00]);      // GS V 0 - full cut
+        return send_bytes_to_printer(&bytes, port_name);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let tmp_path = std::env::temp_dir().join("panchis_receipt.txt");
+        fs::write(&tmp_path, &receipt).map_err(|e| format!("Error writing temp file: {}", e))?;
+        let result = send_to_printer(&tmp_path, port_name);
+        let _ = fs::remove_file(&tmp_path);
+        result
+    }
 }
 
 pub fn get_available_ports() -> Result<Vec<String>, String> {
@@ -81,17 +95,20 @@ fn list_printers() -> Result<Vec<String>, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn send_to_printer(file: &PathBuf, printer_name: &str) -> Result<(), String> {
-    let bytes = fs::read(file).map_err(|e| format!("Error reading temp file: {}", e))?;
-
+fn send_bytes_to_printer(bytes: &[u8], printer_name: &str) -> Result<(), String> {
     let printer = printers::get_printer_by_name(printer_name)
         .ok_or_else(|| format!("Impresora '{}' no encontrada", printer_name))?;
 
+    let opts = printers::common::base::job::PrinterJobOptions {
+        name: Some("Panchis Receipt"),
+        raw_properties: &[("data-type", "RAW"), ("document-format", "application/octet-stream")],
+    };
+
     printer
-        .print(&bytes, printers::common::base::job::PrinterJobOptions::none())
+        .print(bytes, opts)
         .map_err(|e| format!("La impresora '{}' rechazó el trabajo: {:?}. Verificá que esté conectada y encendida.", printer_name, e))?;
 
-    eprintln!("✓ Impresión enviada a {}", printer_name);
+    eprintln!("✓ Impresión enviada a {} ({} bytes)", printer_name, bytes.len());
     Ok(())
 }
 
