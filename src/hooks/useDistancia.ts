@@ -11,10 +11,18 @@ const geocodeCache = new Map<string, { lat: number; lon: number } | null>()
 async function geocode(address: string): Promise<{ lat: number; lon: number } | null> {
   if (geocodeCache.has(address)) return geocodeCache.get(address)!
   try {
-    const ciudad = localStorage.getItem("panchis_ciudad") ?? "Buenos Aires, Argentina"
-    const query = address.toLowerCase().includes("buenos aires") ? address : `${address}, ${ciudad}`
+    const ciudad = localStorage.getItem("panchis_ciudad") ?? "Buenos Aires"
+    // Structured search: street + city separately is much more precise
+    const params = new URLSearchParams({
+      street: address,
+      city: ciudad,
+      country: "Argentina",
+      format: "json",
+      limit: "1",
+      countrycodes: "ar",
+    })
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=ar`,
+      `https://nominatim.openstreetmap.org/search?${params}`,
       { headers: { "Accept-Language": "es", "User-Agent": "Panchis POS App" } }
     )
     const data = await res.json()
@@ -65,7 +73,7 @@ export function useDistancia(destino: string): DistanciaResult {
         if (data.routes?.length > 0) {
           const route = data.routes[0]
           const km = (route.distance / 1000).toFixed(1)
-          const min = Math.round(route.duration / 60)
+          const min = Math.round((route.duration / 60) * 0.75) // moto ~25% más rápida
           setResult({ distancia: `${km} km`, duracion: `~${min} min`, loading: false })
         } else {
           setResult({ distancia: null, duracion: null, loading: false })

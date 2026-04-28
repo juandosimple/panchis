@@ -50,7 +50,7 @@ function Configuracion() {
     () => localStorage.getItem("panchis_local_address") ?? ""
   )
   const [ciudad, setCiudad] = useState(
-    () => localStorage.getItem("panchis_ciudad") ?? "Buenos Aires, Argentina"
+    () => localStorage.getItem("panchis_ciudad") ?? "Buenos Aires"
   )
   const [saved, setSaved] = useState(false)
 
@@ -90,7 +90,7 @@ function Configuracion() {
               type="text"
               value={ciudad}
               onChange={(e) => setCiudad(e.target.value)}
-              placeholder="Ej: Buenos Aires, Argentina"
+              placeholder="Ej: Buenos Aires"
               style={inputStyle}
             />
           </div>
