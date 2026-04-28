@@ -15,6 +15,7 @@ use commands::{
     search_orders, print_order, get_printer_ports,
     create_stock_item, get_stock_items, update_stock_item, delete_stock_item,
     get_item_ingredientes, set_item_ingredientes,
+    export_backup, import_backup,
 };
 
 #[tokio::main]
@@ -58,6 +59,8 @@ async fn main() {
             delete_stock_item,
             get_item_ingredientes,
             set_item_ingredientes,
+            export_backup,
+            import_backup,
         ])
         .run(context)
         .expect("error while running tauri application");

@@ -410,3 +410,37 @@ pub fn print_order(
 pub fn get_printer_ports() -> Result<Vec<String>, String> {
     crate::printer::get_available_ports()
 }
+
+#[tauri::command]
+pub async fn export_backup(
+    path: String,
+    settings: serde_json::Value,
+    app_version: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let data = state.export_backup().await?;
+    let payload = serde_json::json!({
+        "version": "1",
+        "app_version": app_version,
+        "exported_at": chrono::Utc::now().to_rfc3339(),
+        "data": data,
+        "settings": settings,
+    });
+    let json = serde_json::to_string_pretty(&payload).map_err(|e| format!("serialize: {}", e))?;
+    std::fs::write(&path, json).map_err(|e| format!("write file: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn import_backup(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("read file: {}", e))?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("invalid JSON: {}", e))?;
+
+    let data = parsed.get("data").ok_or_else(|| "Backup inválido: falta 'data'".to_string())?;
+    state.import_backup(data).await?;
+
+    Ok(parsed.get("settings").cloned().unwrap_or(serde_json::json!({})))
+}

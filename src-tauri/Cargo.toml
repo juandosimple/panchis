@@ -1,6 +1,6 @@
 [package]
 name = "panchis"
-version = "0.0.13"
+version = "0.0.14"
 description = "Gestor de órdenes para negocio de panchos"
 authors = ["Juando"]
 edition = "2021"

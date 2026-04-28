@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { getVersion } from "@tauri-apps/api/app"
+import { invoke } from "@tauri-apps/api/core"
+import { save, open, ask } from "@tauri-apps/plugin-dialog"
 import { useAuthStore } from "./stores/useAuthStore"
 import { useUIStore } from "./stores/useUIStore"
 import { useOrdersStore } from "./stores/useOrdersStore"
@@ -159,12 +161,113 @@ function Configuracion() {
           />
         </div>
 
+        <BackupCard appVersion={appVersion} />
+
         <UpdateCard appVersion={appVersion} />
       </div>
 
       <div className="config-section">
         <button onClick={logout} className="logout-btn-large">Cerrar Sesión</button>
       </div>
+    </div>
+  )
+}
+
+function BackupCard({ appVersion }: { appVersion: string }) {
+  const [busy, setBusy] = useState<"idle" | "exporting" | "importing">("idle")
+  const [status, setStatus] = useState<{ kind: "success" | "error"; msg: string } | null>(null)
+
+  const showStatus = (kind: "success" | "error", msg: string) => {
+    setStatus({ kind, msg })
+    setTimeout(() => setStatus(null), 5000)
+  }
+
+  const handleExport = async () => {
+    try {
+      const path = await save({
+        defaultPath: `panchis-backup-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: "Backup JSON", extensions: ["json"] }],
+      })
+      if (!path) return
+
+      setBusy("exporting")
+      const settings = {
+        panchis_local_address: localStorage.getItem("panchis_local_address"),
+        panchis_ciudad: localStorage.getItem("panchis_ciudad"),
+        panchis_local_coords: localStorage.getItem("panchis_local_coords"),
+      }
+      await invoke("export_backup", { path, settings, appVersion })
+      showStatus("success", "✓ Backup exportado correctamente")
+    } catch (e) {
+      showStatus("error", `Error: ${e}`)
+    } finally {
+      setBusy("idle")
+    }
+  }
+
+  const handleImport = async () => {
+    try {
+      const yes = await ask(
+        "Esto va a reemplazar TODOS los datos actuales (órdenes, clientes, items, stock).\n\n¿Continuar?",
+        { title: "Importar backup", kind: "warning", okLabel: "Importar", cancelLabel: "Cancelar" }
+      )
+      if (!yes) return
+
+      const selected = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Backup JSON", extensions: ["json"] }],
+      })
+      if (!selected || Array.isArray(selected)) return
+
+      setBusy("importing")
+      const settings = await invoke<Record<string, string | null>>("import_backup", { path: selected })
+
+      for (const [key, value] of Object.entries(settings)) {
+        if (value) localStorage.setItem(key, value)
+        else localStorage.removeItem(key)
+      }
+
+      await ask("Backup importado. La app se va a recargar para aplicar los cambios.", {
+        title: "Listo", kind: "info", okLabel: "OK", cancelLabel: "",
+      })
+      window.location.reload()
+    } catch (e) {
+      showStatus("error", `Error: ${e}`)
+      setBusy("idle")
+    }
+  }
+
+  return (
+    <div className="config-card">
+      <h3>Backup</h3>
+      <p className="config-text">Exportá todos los datos a un archivo JSON, o restaurá un backup previo.</p>
+      <div className="config-row">
+        <button
+          onClick={handleExport}
+          disabled={busy !== "idle"}
+          style={{ padding: "0.5rem 1.25rem", background: "var(--success)", color: "white", border: "none", borderRadius: "8px", cursor: busy !== "idle" ? "not-allowed" : "pointer", fontWeight: 600, opacity: busy !== "idle" ? 0.6 : 1 }}
+        >
+          {busy === "exporting" ? "Exportando..." : "Exportar backup"}
+        </button>
+        <button
+          onClick={handleImport}
+          disabled={busy !== "idle"}
+          style={{ padding: "0.5rem 1.25rem", background: "var(--btn-primary)", color: "white", border: "none", borderRadius: "8px", cursor: busy !== "idle" ? "not-allowed" : "pointer", fontWeight: 600, opacity: busy !== "idle" ? 0.6 : 1 }}
+        >
+          {busy === "importing" ? "Importando..." : "Importar backup"}
+        </button>
+      </div>
+      {status && (
+        <p style={{
+          marginTop: "0.75rem", padding: "0.5rem 0.75rem", borderRadius: "6px", fontSize: "0.85rem",
+          color: status.kind === "success" ? "var(--success)" : "var(--error)",
+          background: status.kind === "success" ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+          border: `1px solid ${status.kind === "success" ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}`,
+        }}>
+          {status.msg}
+        </p>
+      )}
     </div>
   )
 }

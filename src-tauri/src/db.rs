@@ -724,4 +724,134 @@ impl AppState {
             zona,
         }).collect())
     }
+
+    pub async fn export_backup(&self) -> Result<serde_json::Value, String> {
+        let orders = self.get_orders().await?;
+        let clientes = self.get_clientes().await?;
+        let items = self.get_items().await?;
+        let stock = self.get_stock_items().await?;
+
+        let ingredientes_rows: Vec<(i32, i32, f64)> = sqlx::query_as(
+            "SELECT item_id, stock_item_id, cantidad FROM item_ingredientes"
+        )
+        .fetch_all(self.db.as_ref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        let ingredientes: Vec<serde_json::Value> = ingredientes_rows
+            .into_iter()
+            .map(|(item_id, stock_item_id, cantidad)| serde_json::json!({
+                "item_id": item_id,
+                "stock_item_id": stock_item_id,
+                "cantidad": cantidad,
+            }))
+            .collect();
+
+        Ok(serde_json::json!({
+            "orders": orders,
+            "clientes": clientes,
+            "items": items,
+            "stock_items": stock,
+            "item_ingredientes": ingredientes,
+        }))
+    }
+
+    pub async fn import_backup(&self, data: &serde_json::Value) -> Result<(), String> {
+        let mut tx = self.db.begin().await.map_err(|e| format!("tx begin: {}", e))?;
+
+        // Wipe tables (preserve users so admin login still works)
+        for table in &["item_ingredientes", "stock_items", "items", "clientes", "orders"] {
+            sqlx::query(&format!("DELETE FROM {}", table))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("clear {}: {}", table, e))?;
+            sqlx::query("DELETE FROM sqlite_sequence WHERE name = ?")
+                .bind(*table)
+                .execute(&mut *tx)
+                .await
+                .ok();
+        }
+
+        if let Some(arr) = data.get("orders").and_then(|v| v.as_array()) {
+            for o in arr {
+                sqlx::query(
+                    "INSERT INTO orders (id, cliente, items, precio, fecha, hora, zona) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                )
+                .bind(o.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(o.get("cliente").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(o.get("items").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(o.get("precio").and_then(|v| v.as_f64()).unwrap_or(0.0))
+                .bind(o.get("fecha").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(o.get("hora").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(o.get("zona").and_then(|v| v.as_str()).unwrap_or(""))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("insert order: {}", e))?;
+            }
+        }
+
+        if let Some(arr) = data.get("clientes").and_then(|v| v.as_array()) {
+            for c in arr {
+                sqlx::query(
+                    "INSERT INTO clientes (id, nombre, telefono, direccion, zona) VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(c.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(c.get("nombre").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(c.get("telefono").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(c.get("direccion").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(c.get("zona").and_then(|v| v.as_str()).unwrap_or(""))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("insert cliente: {}", e))?;
+            }
+        }
+
+        if let Some(arr) = data.get("items").and_then(|v| v.as_array()) {
+            for i in arr {
+                sqlx::query(
+                    "INSERT INTO items (id, nombre, precio, descripcion, categoria) VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(i.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(i.get("nombre").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(i.get("precio").and_then(|v| v.as_f64()).unwrap_or(0.0))
+                .bind(i.get("descripcion").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(i.get("categoria").and_then(|v| v.as_str()).unwrap_or("General"))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("insert item: {}", e))?;
+            }
+        }
+
+        if let Some(arr) = data.get("stock_items").and_then(|v| v.as_array()) {
+            for s in arr {
+                sqlx::query(
+                    "INSERT INTO stock_items (id, nombre, cantidad, unidad) VALUES (?, ?, ?, ?)"
+                )
+                .bind(s.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(s.get("nombre").and_then(|v| v.as_str()).unwrap_or(""))
+                .bind(s.get("cantidad").and_then(|v| v.as_f64()).unwrap_or(0.0))
+                .bind(s.get("unidad").and_then(|v| v.as_str()).unwrap_or("unidades"))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("insert stock: {}", e))?;
+            }
+        }
+
+        if let Some(arr) = data.get("item_ingredientes").and_then(|v| v.as_array()) {
+            for ing in arr {
+                sqlx::query(
+                    "INSERT INTO item_ingredientes (item_id, stock_item_id, cantidad) VALUES (?, ?, ?)"
+                )
+                .bind(ing.get("item_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(ing.get("stock_item_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(ing.get("cantidad").and_then(|v| v.as_f64()).unwrap_or(1.0))
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("insert ingrediente: {}", e))?;
+            }
+        }
+
+        tx.commit().await.map_err(|e| format!("commit: {}", e))?;
+        Ok(())
+    }
 }
