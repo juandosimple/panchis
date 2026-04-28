@@ -2,6 +2,7 @@ use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteConnectOptions};
 use std::sync::Arc;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailySales {
@@ -75,10 +76,20 @@ pub struct ItemIngrediente {
 }
 
 impl AppState {
-    pub async fn new() -> Self {
-        let database_url = "sqlite:panchis.db?mode=rwc";
+    fn get_db_path() -> PathBuf {
+        let data_dir = dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."));
+        data_dir.join("panchis").join("panchis.db")
+    }
 
-        let connect_options = SqliteConnectOptions::from_str(database_url)
+    pub async fn new() -> Self {
+        let db_path = Self::get_db_path();
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create app data directory");
+        }
+        let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
+
+        let connect_options = SqliteConnectOptions::from_str(&database_url)
             .expect("Failed to create connect options")
             .create_if_missing(true);
 
