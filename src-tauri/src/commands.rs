@@ -386,22 +386,20 @@ pub async fn set_item_ingredientes(
 #[tauri::command]
 pub fn print_order(
     numero: i32,
-    cliente: String,
     items: String,
     total: f64,
     zona: String,
     hora: String,
-    metodoPago: String,
+    metodo_pago: String,
     port: String,
 ) -> Result<String, String> {
     let order = crate::printer::OrderReceipt {
         numero,
-        cliente,
         items,
         total,
         zona,
         hora,
-        metodo_pago: metodoPago,
+        metodo_pago,
     };
 
     crate::printer::print_order(order, &port)?;

@@ -5,7 +5,6 @@ use chrono::Local;
 #[derive(Clone)]
 pub struct OrderReceipt {
     pub numero: i32,
-    pub cliente: String,
     pub items: String,
     pub total: f64,
     pub zona: String,
