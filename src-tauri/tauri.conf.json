@@ -23,9 +23,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "windows": {
-      "wixLanguage": "en-US"
-    }
+    "targets": "all"
   }
 }
