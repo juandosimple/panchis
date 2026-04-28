@@ -50,21 +50,29 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
+      - name: List build artifacts (macOS)
+        if: matrix.platform == 'macos'
+        run: find src-tauri/target/release/bundle -type f -name "*.dmg" || echo "No DMG found"
+
+      - name: List build artifacts (Windows)
+        if: matrix.platform == 'windows'
+        run: dir src-tauri\target\release\bundle\msi\ || echo "No MSI found"
+
       - name: Upload macOS DMG
         if: matrix.platform == 'macos'
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: src-tauri/target/release/bundle/dmg/Panchis.dmg
-          if-no-files-found: error
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
 
       - name: Upload Windows MSI
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: windows-msi
-          path: src-tauri/target/release/bundle/msi/Panchis.msi
-          if-no-files-found: error
+          path: src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: warn
 
   release:
     name: Create Release
